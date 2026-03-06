@@ -15,33 +15,32 @@ A high-performance pipelined RISC-V SoC with caches and AXI4-Lite bus.
 ```
 brv32p/
 ├── rtl/
-│   ├── pkg/brv32p_pkg.sv           # Shared types and parameters
+│   ├── pkg/brv32p_defs.vh            # Shared definitions (include file)
 │   ├── core/
-│   │   ├── brv32p_core.sv          # 5-stage pipeline top
-│   │   ├── decoder.sv              # RV32IMC decoder
-│   │   ├── compressed_decoder.sv   # RV32C expander
-│   │   ├── alu.sv                  # Arithmetic logic unit
-│   │   ├── regfile.sv              # 32x32 register file
-│   │   ├── muldiv.sv               # M-extension multiply/divide
-│   │   ├── branch_predictor.sv     # 2-bit BHT + BTB
-│   │   ├── hazard_unit.sv          # Forwarding + stall logic
-│   │   └── csr.sv                  # Machine-mode CSRs
+│   │   ├── brv32p_core.v             # 5-stage pipeline top
+│   │   ├── decoder.v                 # RV32IMC decoder
+│   │   ├── compressed_decoder.v      # RV32C expander
+│   │   ├── alu.v                     # Arithmetic logic unit
+│   │   ├── regfile.v                 # 32x32 register file
+│   │   ├── muldiv.v                  # M-extension multiply/divide
+│   │   ├── branch_predictor.v        # 2-bit BHT + BTB
+│   │   ├── hazard_unit.v             # Forwarding + stall logic
+│   │   └── csr.v                     # Machine-mode CSRs
 │   ├── cache/
-│   │   ├── icache.sv               # 2-way I-cache
-│   │   └── dcache.sv               # 2-way D-cache (write-through)
+│   │   ├── icache.v                  # 2-way I-cache
+│   │   └── dcache.v                  # 2-way D-cache (write-through)
 │   ├── bus/
-│   │   ├── axi4lite_if.sv          # AXI4-Lite interface definition
-│   │   ├── axi_interconnect.sv     # 2M→2S bus arbiter
-│   │   ├── axi_sram.sv             # AXI SRAM slave
-│   │   └── axi_periph_bridge.sv    # AXI → peripheral bridge
+│   │   ├── axi_interconnect.v        # 2M→2S bus arbiter
+│   │   ├── axi_sram.v                # AXI SRAM slave
+│   │   └── axi_periph_bridge.v       # AXI → peripheral bridge
 │   ├── periph/
-│   │   ├── gpio.sv                 # GPIO with interrupts
-│   │   ├── uart.sv                 # UART TX/RX
-│   │   └── timer.sv                # Timer/counter
-│   └── brv32p_soc.sv               # SoC top-level
-├── tb/tb_brv32p_soc.sv             # SystemVerilog testbench
+│   │   ├── gpio.v                    # GPIO with interrupts
+│   │   ├── uart.v                    # UART TX/RX
+│   │   └── timer.v                   # Timer/counter
+│   └── brv32p_soc.v                  # SoC top-level
+├── tb/tb_brv32p_soc.v                # Verilog testbench
 ├── cocotb/
-│   ├── test_brv32p_soc.py          # CocoTB test suite
+│   ├── test_brv32p_soc.py            # CocoTB test suite
 │   └── Makefile
 ├── firmware/
 │   ├── firmware.hex
@@ -51,16 +50,15 @@ brv32p/
 
 ## Running Tests
 
-### SystemVerilog (Icarus Verilog)
+### Verilog (Icarus Verilog 10.1+)
 ```bash
-cd tb
-iverilog -g2012 -o sim \
-  ../rtl/pkg/brv32p_pkg.sv ../rtl/core/*.sv ../rtl/cache/*.sv \
-  ../rtl/bus/axi_interconnect.sv ../rtl/bus/axi_sram.sv \
-  ../rtl/bus/axi_periph_bridge.sv ../rtl/periph/*.sv \
-  ../rtl/brv32p_soc.sv tb_brv32p_soc.sv
-cp ../firmware/firmware.hex .
-vvp sim +VCD
+iverilog -g2005 -o sim_brv32p -I rtl/pkg -I rtl/core \
+  rtl/core/*.v rtl/cache/*.v \
+  rtl/bus/axi_interconnect.v rtl/bus/axi_sram.v \
+  rtl/bus/axi_periph_bridge.v rtl/periph/*.v \
+  rtl/brv32p_soc.v tb/tb_brv32p_soc.v
+cp firmware/firmware.hex .
+vvp sim_brv32p
 ```
 
 ### CocoTB

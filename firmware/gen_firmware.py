@@ -143,7 +143,9 @@ program = [
 # x16 will hold 0x6C from the JAL. jalr x20, x16, 12 → 0x6C + 12 = 0x78
 program[18] = jalr(x20, x16, 12)  # Jump to 0x78
 
-with open("/home/claude/riscv_mcu/firmware/firmware.hex", "w") as f:
+import os
+outpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "firmware.hex")
+with open(outpath, "w") as f:
     for instr in program:
         f.write(f"{instr & 0xFFFFFFFF:08X}\n")
 

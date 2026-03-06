@@ -185,16 +185,6 @@ The 2M → 2S crossbar grants exclusive access to each slave on a fixed-priority
 
 ---
 
-## Related Repositories
-
-| Repository | Description |
-|---|---|
-| [RISCV_RV32I_SingleCycle](https://github.com/BrendanJamesLynskey/RISCV_RV32I_SingleCycle) | Single-cycle RV32I baseline (Verilog-2001) |
-| [RISCV_RV32IC_MCU](https://github.com/BrendanJamesLynskey/RISCV_RV32IC_MCU) | 5-stage RV32IC with AXI, dcache write-through, 21/21 tests passing |
-| [CPU_OoO](https://github.com/BrendanJamesLynskey/CPU_OoO) | Out-of-order RV32IMC with ROB, RAT, issue queues, gshare predictor |
-
----
-
 ## Documentation
 
 See [`doc/BRV32P_Design_Report.md`](doc/BRV32P_Design_Report.md) for a detailed micro-architecture description covering pipeline staging, cache organisation, the AXI interconnect, and peripheral register maps.

@@ -1,0 +1,235 @@
+#-----------------------------------------------------------
+# Vivado v2025.2 (64-bit)
+# SW Build 6299465 on Fri Nov 14 12:34:56 MST 2025
+# IP Build 6300035 on Fri Nov 14 10:48:45 MST 2025
+# SharedData Build 6298862 on Thu Nov 13 04:50:51 MST 2025
+# Start of session at: Thu Mar 19 16:41:52 2026
+# Process ID         : 9268
+# Current directory  : /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs
+# Command line       : vivado -mode batch -source synth_brv32p_soc.tcl -log vivado_brv32p_soc.log -journal vivado_brv32p_soc.jou
+# Log file           : /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs/vivado_brv32p_soc.log
+# Journal file       : /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs/vivado_brv32p_soc.jou
+# Running On         : bren-ubuntu24-04
+# Platform           : Ubuntu
+# Operating System   : Ubuntu 24.04.4 LTS
+# Processor Detail   : Intel(R) Core(TM) i7-3770 CPU @ 3.40GHz
+# CPU Frequency      : 1948.711 MHz
+# CPU Physical cores : 4
+# CPU Logical cores  : 8
+# Host memory        : 16630 MB
+# Swap memory        : 4294 MB
+# Total Virtual      : 20925 MB
+# Available Virtual  : 15485 MB
+#-----------------------------------------------------------
+source synth_brv32p_soc.tcl
+# set_param general.maxThreads 4
+# create_project -in_memory -part xc7a35tcpg236-1
+# set_property include_dirs {/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/pkg} [current_fileset]
+# read_verilog [list \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/alu.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/branch_predictor.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/brv32p_core.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/compressed_decoder.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/csr.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/decoder.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/hazard_unit.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/regfile.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/dcache.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_interconnect.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_periph_bridge.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_sram.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/timer.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/uart.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/brv32p_soc.v \
+# ]
+# set xdc_file "/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs/clock.xdc"
+# set fp [open $xdc_file w]
+# puts $fp "create_clock -period 10.000 -name clk \[get_ports clk\]"
+# close $fp
+# read_xdc $xdc_file
+# synth_design -top brv32p_soc -part xc7a35tcpg236-1
+Command: synth_design -top brv32p_soc -part xc7a35tcpg236-1
+Starting synth_design
+Attempting to get a license for feature 'Synthesis' and/or device 'xc7a35t'
+INFO: [Common 17-349] Got license for feature 'Synthesis' and/or device 'xc7a35t'
+INFO: [Device 21-403] Loading part xc7a35tcpg236-1
+INFO: [Synth 8-7079] Multithreading enabled for synth_design using a maximum of 4 processes.
+INFO: [Synth 8-7078] Launching helper process for spawning children vivado processes
+INFO: [Synth 8-7075] Helper process launched with PID 9294
+---------------------------------------------------------------------------------
+Starting RTL Elaboration : Time (s): cpu = 00:00:06 ; elapsed = 00:00:06 . Memory (MB): peak = 2216.621 ; gain = 482.156 ; free physical = 6625 ; free virtual = 13564
+---------------------------------------------------------------------------------
+INFO: [Synth 8-6157] synthesizing module 'brv32p_soc' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/brv32p_soc.v:5]
+INFO: [Synth 8-6157] synthesizing module 'brv32p_core' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/brv32p_core.v:5]
+INFO: [Synth 8-6157] synthesizing module 'compressed_decoder' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/compressed_decoder.v:9]
+INFO: [Synth 8-226] default block is never used [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/compressed_decoder.v:78]
+INFO: [Synth 8-6155] done synthesizing module 'compressed_decoder' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/compressed_decoder.v:9]
+INFO: [Synth 8-6157] synthesizing module 'branch_predictor' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/branch_predictor.v:8]
+INFO: [Synth 8-6155] done synthesizing module 'branch_predictor' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/branch_predictor.v:8]
+INFO: [Synth 8-6157] synthesizing module 'decoder' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/decoder.v:8]
+INFO: [Synth 8-6155] done synthesizing module 'decoder' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/decoder.v:8]
+INFO: [Synth 8-6157] synthesizing module 'regfile' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/regfile.v:8]
+INFO: [Synth 8-6155] done synthesizing module 'regfile' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/regfile.v:8]
+INFO: [Synth 8-6157] synthesizing module 'alu' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/alu.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'alu' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/alu.v:5]
+INFO: [Synth 8-6157] synthesizing module 'muldiv' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v:8]
+INFO: [Synth 8-6155] done synthesizing module 'muldiv' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v:8]
+INFO: [Synth 8-6157] synthesizing module 'csr' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/csr.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'csr' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/csr.v:5]
+INFO: [Synth 8-6157] synthesizing module 'hazard_unit' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/hazard_unit.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'hazard_unit' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/hazard_unit.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'brv32p_core' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/brv32p_core.v:5]
+INFO: [Synth 8-6157] synthesizing module 'icache' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'icache' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:5]
+INFO: [Synth 8-6157] synthesizing module 'dcache' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/dcache.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'dcache' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/dcache.v:5]
+INFO: [Synth 8-6157] synthesizing module 'axi_interconnect' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_interconnect.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'axi_interconnect' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_interconnect.v:5]
+INFO: [Synth 8-6157] synthesizing module 'axi_sram' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_sram.v:5]
+	Parameter DEPTH bound to: 8192 - type: integer 
+	Parameter INIT_FILE bound to: firmware.hex - type: string 
+CRITICAL WARNING: [Synth 8-4445] could not open $readmem data file 'firmware.hex'; please make sure the file is added to project and has read permission, ignoring [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_sram.v:42]
+INFO: [Synth 8-6155] done synthesizing module 'axi_sram' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_sram.v:5]
+INFO: [Synth 8-6157] synthesizing module 'axi_periph_bridge' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_periph_bridge.v:4]
+INFO: [Synth 8-6155] done synthesizing module 'axi_periph_bridge' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_periph_bridge.v:4]
+INFO: [Synth 8-6157] synthesizing module 'gpio' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v:5]
+WARNING: [Synth 8-693] zero replication count - replication ignored [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v:80]
+WARNING: [Synth 8-693] zero replication count - replication ignored [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v:81]
+WARNING: [Synth 8-693] zero replication count - replication ignored [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v:82]
+WARNING: [Synth 8-693] zero replication count - replication ignored [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v:83]
+WARNING: [Synth 8-693] zero replication count - replication ignored [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v:84]
+INFO: [Synth 8-6155] done synthesizing module 'gpio' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v:5]
+INFO: [Synth 8-6157] synthesizing module 'uart' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/uart.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'uart' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/uart.v:5]
+INFO: [Synth 8-6157] synthesizing module 'timer' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/timer.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'timer' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/timer.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'brv32p_soc' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/brv32p_soc.v:5]
+WARNING: [Synth 8-6014] Unused sequential element div_signed_r_reg was removed.  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v:59]
+WARNING: [Synth 8-6014] Unused sequential element abs_a_reg was removed.  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v:73]
+WARNING: [Synth 8-6014] Unused sequential element abs_b_reg was removed.  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v:74]
+WARNING: [Synth 8-6014] Unused sequential element shifted_reg was removed.  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v:88]
+WARNING: [Synth 8-6014] Unused sequential element trial_reg was removed.  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v:89]
+WARNING: [Synth 8-6014] Unused sequential element nv_reg was removed.  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/csr.v:101]
+WARNING: [Synth 8-6014] Unused sequential element illegal_c_id_reg was removed.  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/brv32p_core.v:135]
+WARNING: [Synth 8-11357] Potential Runtime issue for 3D-RAM or RAM from Record/Structs for RAM  data_mem_reg with 16384 registers
+WARNING: [Synth 8-7137] Register data_mem_reg[0][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[0][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[0][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[0][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[0][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[0][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[0][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[0][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[1][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[1][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[1][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[1][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[1][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[1][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[1][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[1][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[2][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[2][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[2][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[2][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[2][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[2][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[2][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[2][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[3][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[3][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[3][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[3][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[3][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[3][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[3][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[3][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[4][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[4][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[4][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[4][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[4][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[4][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[4][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[4][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[5][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[5][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[5][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[5][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[5][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[5][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[5][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[5][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[6][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[6][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[6][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[6][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[6][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[6][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[6][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[6][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[7][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[7][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[7][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[7][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[7][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[7][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[7][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[7][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[8][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[8][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[8][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[8][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[8][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[8][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[8][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[8][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[9][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[9][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[9][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[9][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[9][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[9][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[9][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[9][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[10][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[10][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[10][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[10][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[10][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[10][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[10][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[10][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[11][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[11][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[11][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[11][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[11][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[11][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[11][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[11][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[12][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[12][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[12][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[12][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+INFO: [Common 17-14] Message 'Synth 8-7137' appears 100 times and further instances of the messages will be disabled. Use the Tcl command set_msg_config to change the current settings.
+WARNING: [Synth 8-11357] Potential Runtime issue for 3D-RAM or RAM from Record/Structs for RAM  data_mem_reg with 16384 registers
+WARNING: [Synth 8-4767] Trying to implement RAM 'mem_reg' in registers. Block RAM or DRAM implementation is not possible; see log for reasons. [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_sram.v:62]
+Reason is one or more of the following :
+	1: RAM is sensitive to asynchronous reset signal. this RTL style is not supported. 
+ERROR: [Synth 8-3391] Unable to infer a block/distributed RAM for 'mem_reg' because the memory pattern used is not supported. Failed to dissolve the memory into bits because the number of bits (262144) is too large. Use 'set_param synth.elaboration.rodinMoreOptions {rt::set_parameter dissolveMemorySizeLimit 262144}' to allow the memory to be dissolved into individual bits
+---------------------------------------------------------------------------------
+Finished RTL Elaboration : Time (s): cpu = 00:00:31 ; elapsed = 00:00:34 . Memory (MB): peak = 4128.980 ; gain = 2394.516 ; free physical = 4652 ; free virtual = 11621
+---------------------------------------------------------------------------------
+RTL Elaboration failed
+INFO: [Common 17-83] Releasing license: Synthesis
+44 Infos, 115 Warnings, 1 Critical Warnings and 2 Errors encountered.
+synth_design failed
+synth_design: Time (s): cpu = 00:00:35 ; elapsed = 00:00:39 . Memory (MB): peak = 4128.988 ; gain = 2553.875 ; free physical = 4652 ; free virtual = 11621
+INFO: [Common 17-2834] synth_design peak Physical Memory [PSS] (MB): overall = 3748.833; main = 3393.403; forked = 355.430
+INFO: [Common 17-2834] synth_design peak Virtual Memory [VSS] (MB): overall = 5156.984; main = 4128.984; forked = 1028.016
+ERROR: [Common 17-69] Command failed: Synthesis failed - please see the console or run log file for details
+INFO: [Common 17-206] Exiting Vivado at Thu Mar 19 16:42:39 2026...

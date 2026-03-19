@@ -1,0 +1,857 @@
+#-----------------------------------------------------------
+# Vivado v2025.2 (64-bit)
+# SW Build 6299465 on Fri Nov 14 12:34:56 MST 2025
+# IP Build 6300035 on Fri Nov 14 10:48:45 MST 2025
+# SharedData Build 6298862 on Thu Nov 13 04:50:51 MST 2025
+# Start of session at: Thu Mar 19 16:43:16 2026
+# Process ID         : 9551
+# Current directory  : /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs
+# Command line       : vivado -mode batch -source synth_brv32p_soc.tcl -log vivado_brv32p_soc.log -journal vivado_brv32p_soc.jou
+# Log file           : /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs/vivado_brv32p_soc.log
+# Journal file       : /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs/vivado_brv32p_soc.jou
+# Running On         : bren-ubuntu24-04
+# Platform           : Ubuntu
+# Operating System   : Ubuntu 24.04.4 LTS
+# Processor Detail   : Intel(R) Core(TM) i7-3770 CPU @ 3.40GHz
+# CPU Frequency      : 2370.080 MHz
+# CPU Physical cores : 4
+# CPU Logical cores  : 8
+# Host memory        : 16630 MB
+# Swap memory        : 4294 MB
+# Total Virtual      : 20925 MB
+# Available Virtual  : 15454 MB
+#-----------------------------------------------------------
+source synth_brv32p_soc.tcl
+# set_param general.maxThreads 4
+# set_param synth.elaboration.rodinMoreOptions {rt::set_parameter dissolveMemorySizeLimit 524288}
+# create_project -in_memory -part xc7a35tcpg236-1
+# set_property include_dirs {/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/pkg} [current_fileset]
+# set_property generic {MEM_DEPTH=1024} [current_fileset]
+# read_verilog [list \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/alu.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/branch_predictor.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/brv32p_core.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/compressed_decoder.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/csr.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/decoder.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/hazard_unit.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/regfile.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/dcache.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_interconnect.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_periph_bridge.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_sram.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/timer.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/uart.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/brv32p_soc.v \
+# ]
+# set xdc_file "/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs/clock.xdc"
+# set fp [open $xdc_file w]
+# puts $fp "create_clock -period 10.000 -name clk \[get_ports clk\]"
+# close $fp
+# read_xdc $xdc_file
+# synth_design -top brv32p_soc -part xc7a35tcpg236-1
+Command: synth_design -top brv32p_soc -part xc7a35tcpg236-1
+Starting synth_design
+Attempting to get a license for feature 'Synthesis' and/or device 'xc7a35t'
+INFO: [Common 17-349] Got license for feature 'Synthesis' and/or device 'xc7a35t'
+INFO: [Device 21-403] Loading part xc7a35tcpg236-1
+INFO: [Synth 8-7079] Multithreading enabled for synth_design using a maximum of 4 processes.
+INFO: [Synth 8-7078] Launching helper process for spawning children vivado processes
+INFO: [Synth 8-7075] Helper process launched with PID 9578
+---------------------------------------------------------------------------------
+Starting RTL Elaboration : Time (s): cpu = 00:00:06 ; elapsed = 00:00:06 . Memory (MB): peak = 2216.723 ; gain = 483.188 ; free physical = 6442 ; free virtual = 13415
+---------------------------------------------------------------------------------
+INFO: [Synth 8-6157] synthesizing module 'brv32p_soc' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/brv32p_soc.v:5]
+	Parameter MEM_DEPTH bound to: 1024 - type: integer 
+INFO: [Synth 8-6157] synthesizing module 'brv32p_core' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/brv32p_core.v:5]
+INFO: [Synth 8-6157] synthesizing module 'compressed_decoder' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/compressed_decoder.v:9]
+INFO: [Synth 8-226] default block is never used [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/compressed_decoder.v:78]
+INFO: [Synth 8-6155] done synthesizing module 'compressed_decoder' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/compressed_decoder.v:9]
+INFO: [Synth 8-6157] synthesizing module 'branch_predictor' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/branch_predictor.v:8]
+INFO: [Synth 8-6155] done synthesizing module 'branch_predictor' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/branch_predictor.v:8]
+INFO: [Synth 8-6157] synthesizing module 'decoder' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/decoder.v:8]
+INFO: [Synth 8-6155] done synthesizing module 'decoder' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/decoder.v:8]
+INFO: [Synth 8-6157] synthesizing module 'regfile' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/regfile.v:8]
+INFO: [Synth 8-6155] done synthesizing module 'regfile' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/regfile.v:8]
+INFO: [Synth 8-6157] synthesizing module 'alu' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/alu.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'alu' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/alu.v:5]
+INFO: [Synth 8-6157] synthesizing module 'muldiv' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v:8]
+INFO: [Synth 8-6155] done synthesizing module 'muldiv' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v:8]
+INFO: [Synth 8-6157] synthesizing module 'csr' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/csr.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'csr' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/csr.v:5]
+INFO: [Synth 8-6157] synthesizing module 'hazard_unit' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/hazard_unit.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'hazard_unit' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/hazard_unit.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'brv32p_core' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/brv32p_core.v:5]
+INFO: [Synth 8-6157] synthesizing module 'icache' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'icache' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:5]
+INFO: [Synth 8-6157] synthesizing module 'dcache' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/dcache.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'dcache' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/dcache.v:5]
+INFO: [Synth 8-6157] synthesizing module 'axi_interconnect' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_interconnect.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'axi_interconnect' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_interconnect.v:5]
+INFO: [Synth 8-6157] synthesizing module 'axi_sram' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_sram.v:5]
+	Parameter DEPTH bound to: 1024 - type: integer 
+	Parameter INIT_FILE bound to: firmware.hex - type: string 
+CRITICAL WARNING: [Synth 8-4445] could not open $readmem data file 'firmware.hex'; please make sure the file is added to project and has read permission, ignoring [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_sram.v:42]
+INFO: [Synth 8-6155] done synthesizing module 'axi_sram' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_sram.v:5]
+INFO: [Synth 8-6157] synthesizing module 'axi_periph_bridge' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_periph_bridge.v:4]
+INFO: [Synth 8-6155] done synthesizing module 'axi_periph_bridge' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_periph_bridge.v:4]
+INFO: [Synth 8-6157] synthesizing module 'gpio' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v:5]
+WARNING: [Synth 8-693] zero replication count - replication ignored [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v:80]
+WARNING: [Synth 8-693] zero replication count - replication ignored [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v:81]
+WARNING: [Synth 8-693] zero replication count - replication ignored [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v:82]
+WARNING: [Synth 8-693] zero replication count - replication ignored [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v:83]
+WARNING: [Synth 8-693] zero replication count - replication ignored [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v:84]
+INFO: [Synth 8-6155] done synthesizing module 'gpio' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v:5]
+INFO: [Synth 8-6157] synthesizing module 'uart' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/uart.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'uart' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/uart.v:5]
+INFO: [Synth 8-6157] synthesizing module 'timer' [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/timer.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'timer' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/timer.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'brv32p_soc' (0#1) [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/brv32p_soc.v:5]
+WARNING: [Synth 8-6014] Unused sequential element div_signed_r_reg was removed.  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v:59]
+WARNING: [Synth 8-6014] Unused sequential element abs_a_reg was removed.  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v:73]
+WARNING: [Synth 8-6014] Unused sequential element abs_b_reg was removed.  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v:74]
+WARNING: [Synth 8-6014] Unused sequential element shifted_reg was removed.  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v:88]
+WARNING: [Synth 8-6014] Unused sequential element trial_reg was removed.  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v:89]
+WARNING: [Synth 8-6014] Unused sequential element nv_reg was removed.  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/csr.v:101]
+WARNING: [Synth 8-6014] Unused sequential element illegal_c_id_reg was removed.  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/brv32p_core.v:135]
+WARNING: [Synth 8-11357] Potential Runtime issue for 3D-RAM or RAM from Record/Structs for RAM  data_mem_reg with 16384 registers
+WARNING: [Synth 8-7137] Register data_mem_reg[0][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[0][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[0][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[0][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[0][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[0][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[0][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[0][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[1][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[1][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[1][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[1][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[1][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[1][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[1][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[1][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[2][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[2][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[2][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[2][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[2][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[2][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[2][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[2][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[3][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[3][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[3][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[3][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[3][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[3][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[3][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[3][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[4][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[4][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[4][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[4][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[4][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[4][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[4][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[4][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[5][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[5][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[5][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[5][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[5][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[5][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[5][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[5][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[6][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[6][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[6][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[6][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[6][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[6][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[6][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[6][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[7][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[7][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[7][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[7][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[7][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[7][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[7][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[7][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[8][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[8][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[8][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[8][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[8][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[8][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[8][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[8][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[9][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[9][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[9][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[9][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[9][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[9][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[9][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[9][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[10][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[10][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[10][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[10][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[10][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[10][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[10][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[10][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[11][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[11][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[11][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[11][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[11][1][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[11][1][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[11][1][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[11][1][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[12][0][0] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[12][0][1] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[12][0][2] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+WARNING: [Synth 8-7137] Register data_mem_reg[12][0][3] in module icache has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v:122]
+INFO: [Common 17-14] Message 'Synth 8-7137' appears 100 times and further instances of the messages will be disabled. Use the Tcl command set_msg_config to change the current settings.
+WARNING: [Synth 8-11357] Potential Runtime issue for 3D-RAM or RAM from Record/Structs for RAM  data_mem_reg with 16384 registers
+WARNING: [Synth 8-4767] Trying to implement RAM 'mem_reg' in registers. Block RAM or DRAM implementation is not possible; see log for reasons. [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_sram.v:62]
+Reason is one or more of the following :
+	1: RAM is sensitive to asynchronous reset signal. this RTL style is not supported. 
+WARNING: [Synth 8-13159] Potential Runtime issue for RAM 'mem_reg' since this is dissolved into (32768) registers bits. Consider modifying RTL as per supported RAM templates
+WARNING: [Synth 8-7129] Port addr[7] in module timer is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[6] in module timer is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[5] in module timer is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[1] in module timer is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[0] in module timer is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[7] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[6] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[5] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[4] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[1] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[0] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wdata[31] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wdata[30] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wdata[29] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wdata[28] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wdata[27] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wdata[26] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wdata[25] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wdata[24] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wdata[23] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wdata[22] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wdata[21] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wdata[20] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wdata[19] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wdata[18] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wdata[17] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wdata[16] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[7] in module gpio is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[6] in module gpio is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[5] in module gpio is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[1] in module gpio is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[0] in module gpio is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wstrb[3] in module axi_periph_bridge is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wstrb[2] in module axi_periph_bridge is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wstrb[1] in module axi_periph_bridge is either unconnected or has no load
+WARNING: [Synth 8-7129] Port wstrb[0] in module axi_periph_bridge is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[31] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[30] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[29] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[28] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[27] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[26] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[25] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[24] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[23] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[22] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[21] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[20] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[19] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[18] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[17] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[16] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[15] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[14] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[13] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[12] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[1] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port araddr[0] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[31] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[30] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[29] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[28] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[27] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[26] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[25] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[24] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[23] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[22] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[21] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[20] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[19] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[18] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[17] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[16] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[15] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[14] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[13] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[12] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[1] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port awaddr[0] in module axi_sram is either unconnected or has no load
+WARNING: [Synth 8-7129] Port ex_reg_wr in module hazard_unit is either unconnected or has no load
+WARNING: [Synth 8-7129] Port ex_wb_sel[2] in module hazard_unit is either unconnected or has no load
+WARNING: [Synth 8-7129] Port ex_wb_sel[1] in module hazard_unit is either unconnected or has no load
+WARNING: [Synth 8-7129] Port ex_wb_sel[0] in module hazard_unit is either unconnected or has no load
+WARNING: [Synth 8-7129] Port jump_ex in module hazard_unit is either unconnected or has no load
+WARNING: [Synth 8-7129] Port csr_op[2] in module csr is either unconnected or has no load
+WARNING: [Synth 8-7129] Port pc[1] in module branch_predictor is either unconnected or has no load
+WARNING: [Synth 8-7129] Port pc[0] in module branch_predictor is either unconnected or has no load
+WARNING: [Synth 8-7129] Port update_pc[1] in module branch_predictor is either unconnected or has no load
+WARNING: [Synth 8-7129] Port update_pc[0] in module branch_predictor is either unconnected or has no load
+---------------------------------------------------------------------------------
+Finished RTL Elaboration : Time (s): cpu = 00:00:37 ; elapsed = 00:00:40 . Memory (MB): peak = 4134.363 ; gain = 2400.828 ; free physical = 4623 ; free virtual = 11611
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Handling Custom Attributes
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Handling Custom Attributes : Time (s): cpu = 00:00:41 ; elapsed = 00:00:44 . Memory (MB): peak = 4134.363 ; gain = 2400.828 ; free physical = 4623 ; free virtual = 11611
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished RTL Optimization Phase 1 : Time (s): cpu = 00:00:41 ; elapsed = 00:00:44 . Memory (MB): peak = 4134.363 ; gain = 2400.828 ; free physical = 4623 ; free virtual = 11611
+---------------------------------------------------------------------------------
+Netlist sorting complete. Time (s): cpu = 00:00:03 ; elapsed = 00:00:03 . Memory (MB): peak = 4134.363 ; gain = 0.000 ; free physical = 4630 ; free virtual = 11619
+INFO: [Project 1-570] Preparing netlist for logic optimization
+
+Processing XDC Constraints
+Initializing timing engine
+Parsing XDC File [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs/clock.xdc]
+Finished Parsing XDC File [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs/clock.xdc]
+Completed Processing XDC Constraints
+
+Netlist sorting complete. Time (s): cpu = 00:00:00.06 ; elapsed = 00:00:00.06 . Memory (MB): peak = 4408.441 ; gain = 0.000 ; free physical = 5267 ; free virtual = 12256
+INFO: [Project 1-111] Unisim Transformation Summary:
+No Unisim elements were transformed.
+
+Constraint Validation Runtime : Time (s): cpu = 00:00:02 ; elapsed = 00:00:01 . Memory (MB): peak = 4424.570 ; gain = 0.000 ; free physical = 5231 ; free virtual = 12220
+---------------------------------------------------------------------------------
+Finished Constraint Validation : Time (s): cpu = 00:01:34 ; elapsed = 00:01:30 . Memory (MB): peak = 4424.570 ; gain = 2691.035 ; free physical = 2154 ; free virtual = 9143
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Loading Part and Timing Information
+---------------------------------------------------------------------------------
+Loading part: xc7a35tcpg236-1
+---------------------------------------------------------------------------------
+Finished Loading Part and Timing Information : Time (s): cpu = 00:01:34 ; elapsed = 00:01:31 . Memory (MB): peak = 4432.863 ; gain = 2699.328 ; free physical = 2154 ; free virtual = 9143
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Applying 'set_property' XDC Constraints
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished applying 'set_property' XDC Constraints : Time (s): cpu = 00:01:34 ; elapsed = 00:01:31 . Memory (MB): peak = 4432.863 ; gain = 2699.328 ; free physical = 2154 ; free virtual = 9143
+---------------------------------------------------------------------------------
+INFO: [Synth 8-802] inferred FSM for state register 'state_reg' in module 'icache'
+INFO: [Synth 8-802] inferred FSM for state register 'state_reg' in module 'dcache'
+INFO: [Synth 8-802] inferred FSM for state register 'arb_state_reg' in module 'axi_interconnect'
+INFO: [Synth 8-802] inferred FSM for state register 'rd_state_reg' in module 'axi_sram'
+INFO: [Synth 8-802] inferred FSM for state register 'wr_state_reg' in module 'axi_sram'
+INFO: [Synth 8-802] inferred FSM for state register 'rfsm_reg' in module 'axi_periph_bridge'
+INFO: [Synth 8-802] inferred FSM for state register 'wfsm_reg' in module 'axi_periph_bridge'
+INFO: [Synth 8-802] inferred FSM for state register 'tx_state_reg' in module 'uart'
+INFO: [Synth 8-802] inferred FSM for state register 'rx_state_reg' in module 'uart'
+---------------------------------------------------------------------------------------------------
+                   State |                     New Encoding |                Previous Encoding 
+---------------------------------------------------------------------------------------------------
+                  S_IDLE |                              001 |                               00
+                  S_FILL |                              010 |                               01
+                  S_DONE |                              100 |                               10
+---------------------------------------------------------------------------------------------------
+INFO: [Synth 8-3354] encoded FSM with state register 'state_reg' using encoding 'one-hot' in module 'icache'
+---------------------------------------------------------------------------------------------------
+                   State |                     New Encoding |                Previous Encoding 
+---------------------------------------------------------------------------------------------------
+                 DC_IDLE |                              001 |                              000
+                 DC_FILL |                              010 |                              001
+            DC_FILL_DONE |                              100 |                              010
+---------------------------------------------------------------------------------------------------
+INFO: [Synth 8-3354] encoded FSM with state register 'state_reg' using encoding 'one-hot' in module 'dcache'
+---------------------------------------------------------------------------------------------------
+                   State |                     New Encoding |                Previous Encoding 
+---------------------------------------------------------------------------------------------------
+                ARB_IDLE |                               00 |                              000
+               ARB_M1_WR |                               01 |                              011
+               ARB_M1_RD |                               10 |                              010
+               ARB_M0_RD |                               11 |                              001
+---------------------------------------------------------------------------------------------------
+INFO: [Synth 8-3354] encoded FSM with state register 'arb_state_reg' using encoding 'sequential' in module 'axi_interconnect'
+---------------------------------------------------------------------------------------------------
+                   State |                     New Encoding |                Previous Encoding 
+---------------------------------------------------------------------------------------------------
+                 RD_IDLE |                                0 |                               00
+                 RD_RESP |                                1 |                               01
+---------------------------------------------------------------------------------------------------
+INFO: [Synth 8-3354] encoded FSM with state register 'rd_state_reg' using encoding 'sequential' in module 'axi_sram'
+---------------------------------------------------------------------------------------------------
+                   State |                     New Encoding |                Previous Encoding 
+---------------------------------------------------------------------------------------------------
+                 WR_IDLE |                                0 |                               00
+                 WR_RESP |                                1 |                               01
+---------------------------------------------------------------------------------------------------
+INFO: [Synth 8-3354] encoded FSM with state register 'wr_state_reg' using encoding 'sequential' in module 'axi_sram'
+---------------------------------------------------------------------------------------------------
+                   State |                     New Encoding |                Previous Encoding 
+---------------------------------------------------------------------------------------------------
+                      RI |                              001 |                               00
+                      RA |                              010 |                               01
+                      RR |                              100 |                               10
+---------------------------------------------------------------------------------------------------
+INFO: [Synth 8-3354] encoded FSM with state register 'rfsm_reg' using encoding 'one-hot' in module 'axi_periph_bridge'
+---------------------------------------------------------------------------------------------------
+                   State |                     New Encoding |                Previous Encoding 
+---------------------------------------------------------------------------------------------------
+                      WI |                              001 |                               00
+                      WA |                              010 |                               01
+                     WRR |                              100 |                               10
+---------------------------------------------------------------------------------------------------
+INFO: [Synth 8-3354] encoded FSM with state register 'wfsm_reg' using encoding 'one-hot' in module 'axi_periph_bridge'
+---------------------------------------------------------------------------------------------------
+                   State |                     New Encoding |                Previous Encoding 
+---------------------------------------------------------------------------------------------------
+                 TX_IDLE |                               00 |                               00
+                TX_START |                               01 |                               01
+                 TX_DATA |                               10 |                               10
+                 TX_STOP |                               11 |                               11
+---------------------------------------------------------------------------------------------------
+INFO: [Synth 8-3354] encoded FSM with state register 'tx_state_reg' using encoding 'sequential' in module 'uart'
+---------------------------------------------------------------------------------------------------
+                   State |                     New Encoding |                Previous Encoding 
+---------------------------------------------------------------------------------------------------
+                 RX_IDLE |                               00 |                               00
+                RX_START |                               01 |                               01
+                 RX_DATA |                               10 |                               10
+                 RX_STOP |                               11 |                               11
+---------------------------------------------------------------------------------------------------
+INFO: [Synth 8-3354] encoded FSM with state register 'rx_state_reg' using encoding 'sequential' in module 'uart'
+---------------------------------------------------------------------------------
+Finished RTL Optimization Phase 2 : Time (s): cpu = 00:02:36 ; elapsed = 00:02:34 . Memory (MB): peak = 4445.074 ; gain = 2711.539 ; free physical = 2181 ; free virtual = 9186
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start RTL Component Statistics 
+---------------------------------------------------------------------------------
+Detailed RTL Component Info : 
++---Adders : 
+	   2 Input   64 Bit       Adders := 1     
+	   3 Input   33 Bit       Adders := 1     
+	   2 Input   32 Bit       Adders := 9     
+	   3 Input   32 Bit       Adders := 1     
+	   2 Input   16 Bit       Adders := 2     
+	   2 Input    6 Bit       Adders := 1     
+	   2 Input    3 Bit       Adders := 2     
+	   2 Input    2 Bit       Adders := 3     
++---XORs : 
+	   2 Input     32 Bit         XORs := 1     
+	   2 Input      1 Bit         XORs := 1     
++---Registers : 
+	               64 Bit    Registers := 1     
+	               44 Bit    Registers := 3     
+	               32 Bit    Registers := 2188  
+	               24 Bit    Registers := 64    
+	               22 Bit    Registers := 256   
+	               16 Bit    Registers := 3     
+	                8 Bit    Registers := 3     
+	                6 Bit    Registers := 1     
+	                5 Bit    Registers := 5     
+	                4 Bit    Registers := 2     
+	                3 Bit    Registers := 2     
+	                2 Bit    Registers := 256   
+	                1 Bit    Registers := 465   
++---Multipliers : 
+	              32x32  Multipliers := 1     
+	              32x33  Multipliers := 1     
++---Muxes : 
+	   2 Input   64 Bit        Muxes := 2     
+	   8 Input   44 Bit        Muxes := 2     
+	   2 Input   44 Bit        Muxes := 3     
+	   4 Input   32 Bit        Muxes := 28    
+	   3 Input   32 Bit        Muxes := 524   
+	   2 Input   32 Bit        Muxes := 2632  
+	   5 Input   32 Bit        Muxes := 3     
+	   6 Input   32 Bit        Muxes := 1     
+	   7 Input   26 Bit        Muxes := 1     
+	   2 Input   16 Bit        Muxes := 1     
+	   4 Input   16 Bit        Muxes := 2     
+	   2 Input    8 Bit        Muxes := 4102  
+	   4 Input    8 Bit        Muxes := 2     
+	   2 Input    6 Bit        Muxes := 1     
+	   2 Input    5 Bit        Muxes := 5     
+	   3 Input    4 Bit        Muxes := 1     
+	   2 Input    4 Bit        Muxes := 6     
+	   5 Input    4 Bit        Muxes := 1     
+	   4 Input    4 Bit        Muxes := 2     
+	   2 Input    3 Bit        Muxes := 2     
+	   4 Input    3 Bit        Muxes := 2     
+	   3 Input    2 Bit        Muxes := 4     
+	   2 Input    2 Bit        Muxes := 6     
+	   4 Input    2 Bit        Muxes := 5     
+	   3 Input    1 Bit        Muxes := 1178  
+	   2 Input    1 Bit        Muxes := 1248  
+	   5 Input    1 Bit        Muxes := 4     
+	   4 Input    1 Bit        Muxes := 33    
+	   6 Input    1 Bit        Muxes := 6     
+---------------------------------------------------------------------------------
+Finished RTL Component Statistics 
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Part Resource Summary
+---------------------------------------------------------------------------------
+Part Resources:
+DSPs: 90 (col length:60)
+BRAMs: 100 (col length: RAMB18 60 RAMB36 30)
+---------------------------------------------------------------------------------
+Finished Part Resource Summary
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Cross Boundary and Area Optimization
+---------------------------------------------------------------------------------
+INFO: [Synth 8-5546] ROM "ctrl" won't be mapped to RAM because it is too sparse
+INFO: [Synth 8-5546] ROM "ctrl" won't be mapped to RAM because it is too sparse
+INFO: [Synth 8-5544] ROM "ctrl" won't be mapped to Block RAM because address size (3) smaller than threshold (5)
+INFO: [Synth 8-12192] Not enough pipeline registers after wide multiplier. Pipeline registers present is 0. Recommended levels of pipeline registers is 4. [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v:30]
+INFO: [Synth 8-12192] Not enough pipeline registers after wide multiplier. Pipeline registers present is 0. Recommended levels of pipeline registers is 4. [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v:29]
+DSP Report: Generating DSP mul_uu, operation Mode is: A*B.
+DSP Report: operator mul_uu is absorbed into DSP mul_uu.
+DSP Report: operator mul_uu is absorbed into DSP mul_uu.
+DSP Report: Generating DSP mul_uu, operation Mode is: (PCIN>>17)+A*B.
+DSP Report: operator mul_uu is absorbed into DSP mul_uu.
+DSP Report: operator mul_uu is absorbed into DSP mul_uu.
+DSP Report: Generating DSP mul_uu, operation Mode is: A*B.
+DSP Report: operator mul_uu is absorbed into DSP mul_uu.
+DSP Report: operator mul_uu is absorbed into DSP mul_uu.
+DSP Report: Generating DSP mul_uu, operation Mode is: (PCIN>>17)+A*B.
+DSP Report: operator mul_uu is absorbed into DSP mul_uu.
+DSP Report: operator mul_uu is absorbed into DSP mul_uu.
+DSP Report: Generating DSP mul_su, operation Mode is: A*B.
+DSP Report: operator mul_su is absorbed into DSP mul_su.
+DSP Report: operator mul_su is absorbed into DSP mul_su.
+DSP Report: Generating DSP mul_su, operation Mode is: (PCIN>>17)+A*B.
+DSP Report: operator mul_su is absorbed into DSP mul_su.
+DSP Report: operator mul_su is absorbed into DSP mul_su.
+DSP Report: Generating DSP mul_su, operation Mode is: A*B.
+DSP Report: operator mul_su is absorbed into DSP mul_su.
+DSP Report: operator mul_su is absorbed into DSP mul_su.
+DSP Report: Generating DSP mul_su, operation Mode is: (PCIN>>17)+A*B.
+DSP Report: operator mul_su is absorbed into DSP mul_su.
+DSP Report: operator mul_su is absorbed into DSP mul_su.
+DSP Report: Generating DSP mul_ss, operation Mode is: A*B.
+DSP Report: operator mul_ss is absorbed into DSP mul_ss.
+DSP Report: operator mul_ss is absorbed into DSP mul_ss.
+DSP Report: Generating DSP mul_ss, operation Mode is: (PCIN>>17)+A*B.
+DSP Report: operator mul_ss is absorbed into DSP mul_ss.
+DSP Report: operator mul_ss is absorbed into DSP mul_ss.
+DSP Report: Generating DSP mul_ss, operation Mode is: A*B.
+DSP Report: operator mul_ss is absorbed into DSP mul_ss.
+DSP Report: operator mul_ss is absorbed into DSP mul_ss.
+DSP Report: Generating DSP mul_ss, operation Mode is: (PCIN>>17)+A*B.
+DSP Report: operator mul_ss is absorbed into DSP mul_ss.
+DSP Report: operator mul_ss is absorbed into DSP mul_ss.
+WARNING: [Synth 8-7129] Port addr[7] in module timer is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[6] in module timer is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[5] in module timer is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[1] in module timer is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[0] in module timer is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[7] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[6] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[5] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[4] in module uart is either unconnected or has no load
+WARNING: [Synth 8-7129] Port addr[1] in module uart is either unconnected or has no load
+INFO: [Common 17-14] Message 'Synth 8-7129' appears 100 times and further instances of the messages will be disabled. Use the Tcl command set_msg_config to change the current settings.
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[31]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[30]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[29]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[27]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[28]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[26]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[24]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[25]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[23]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[21]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[22]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[20]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[18]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[19]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[17]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[15]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[16]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[14]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[12]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[13]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[11]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[9]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[10]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[8]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[6]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[7]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[5]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[3]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_id_reg[4]' (FDCE) to 'u_core/pc_inc_id_reg[0]'
+INFO: [Synth 8-3333] propagating constant 0 across sequential element (u_core/\pc_inc_id_reg[0] )
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[30]' (FDCE) to 'u_core/u_csr/mstatus_reg[31]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[31]' (FDCE) to 'u_core/u_csr/mstatus_reg[27]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[27]' (FDCE) to 'u_core/u_csr/mstatus_reg[28]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[28]' (FDCE) to 'u_core/u_csr/mstatus_reg[29]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[29]' (FDCE) to 'u_core/u_csr/mstatus_reg[24]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[24]' (FDCE) to 'u_core/u_csr/mstatus_reg[25]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[25]' (FDCE) to 'u_core/u_csr/mstatus_reg[26]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[26]' (FDCE) to 'u_core/u_csr/mstatus_reg[21]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[21]' (FDCE) to 'u_core/u_csr/mstatus_reg[22]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[22]' (FDCE) to 'u_core/u_csr/mstatus_reg[23]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[23]' (FDCE) to 'u_core/u_csr/mstatus_reg[18]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[18]' (FDCE) to 'u_core/u_csr/mstatus_reg[19]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[19]' (FDCE) to 'u_core/u_csr/mstatus_reg[20]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[20]' (FDCE) to 'u_core/u_csr/mstatus_reg[15]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[15]' (FDCE) to 'u_core/u_csr/mstatus_reg[16]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[16]' (FDCE) to 'u_core/u_csr/mstatus_reg[17]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[17]' (FDCE) to 'u_core/u_csr/mstatus_reg[12]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[12]' (FDCE) to 'u_core/u_csr/mstatus_reg[13]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[13]' (FDCE) to 'u_core/u_csr/mstatus_reg[14]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[14]' (FDCE) to 'u_core/u_csr/mstatus_reg[9]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[9]' (FDCE) to 'u_core/u_csr/mstatus_reg[10]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[10]' (FDCE) to 'u_core/u_csr/mstatus_reg[11]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[11]' (FDCE) to 'u_core/u_csr/mstatus_reg[6]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[6]' (FDCE) to 'u_core/u_csr/mstatus_reg[8]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[8]' (FDCE) to 'u_core/u_csr/mstatus_reg[4]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[4]' (FDCE) to 'u_core/u_csr/mstatus_reg[5]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[5]' (FDCE) to 'u_core/u_csr/mstatus_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[0]' (FDCE) to 'u_core/u_csr/mstatus_reg[1]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mstatus_reg[1]' (FDCE) to 'u_core/u_csr/mstatus_reg[2]'
+INFO: [Synth 8-3333] propagating constant 0 across sequential element (u_core/u_csr/\mstatus_reg[2] )
+INFO: [Synth 8-3886] merging instance 'u_core/ctrl_ex_reg[38]' (FDCE) to 'u_core/ctrl_ex_reg[28]'
+INFO: [Synth 8-3886] merging instance 'u_core/u_csr/mtvec_reg[0]' (FDCE) to 'u_core/u_csr/mtvec_reg[1]'
+INFO: [Synth 8-3333] propagating constant 0 across sequential element (u_core/u_csr/\mtvec_reg[1] )
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[31]' (FDCE) to 'u_core/pc_inc_ex_reg[0]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[0]' (FDCE) to 'u_core/pc_inc_ex_reg[3]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[3]' (FDCE) to 'u_core/pc_inc_ex_reg[4]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[4]' (FDCE) to 'u_core/pc_inc_ex_reg[5]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[5]' (FDCE) to 'u_core/pc_inc_ex_reg[6]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[6]' (FDCE) to 'u_core/pc_inc_ex_reg[7]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[7]' (FDCE) to 'u_core/pc_inc_ex_reg[8]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[8]' (FDCE) to 'u_core/pc_inc_ex_reg[9]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[9]' (FDCE) to 'u_core/pc_inc_ex_reg[10]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[10]' (FDCE) to 'u_core/pc_inc_ex_reg[11]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[11]' (FDCE) to 'u_core/pc_inc_ex_reg[12]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[12]' (FDCE) to 'u_core/pc_inc_ex_reg[13]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[13]' (FDCE) to 'u_core/pc_inc_ex_reg[14]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[14]' (FDCE) to 'u_core/pc_inc_ex_reg[15]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[15]' (FDCE) to 'u_core/pc_inc_ex_reg[16]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[16]' (FDCE) to 'u_core/pc_inc_ex_reg[17]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[17]' (FDCE) to 'u_core/pc_inc_ex_reg[18]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[18]' (FDCE) to 'u_core/pc_inc_ex_reg[19]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[19]' (FDCE) to 'u_core/pc_inc_ex_reg[20]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[20]' (FDCE) to 'u_core/pc_inc_ex_reg[21]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[21]' (FDCE) to 'u_core/pc_inc_ex_reg[22]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[22]' (FDCE) to 'u_core/pc_inc_ex_reg[23]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[23]' (FDCE) to 'u_core/pc_inc_ex_reg[24]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[24]' (FDCE) to 'u_core/pc_inc_ex_reg[25]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[25]' (FDCE) to 'u_core/pc_inc_ex_reg[26]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[26]' (FDCE) to 'u_core/pc_inc_ex_reg[27]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[27]' (FDCE) to 'u_core/pc_inc_ex_reg[28]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[28]' (FDCE) to 'u_core/pc_inc_ex_reg[29]'
+INFO: [Synth 8-3886] merging instance 'u_core/pc_inc_ex_reg[29]' (FDCE) to 'u_core/pc_inc_ex_reg[30]'
+INFO: [Synth 8-3333] propagating constant 0 across sequential element (u_core/\pc_inc_ex_reg[30] )
+INFO: [Synth 8-3886] merging instance 'u_core/instr_id_reg[0]' (FDPE) to 'u_core/instr_id_reg[1]'
+INFO: [Synth 8-3333] propagating constant 1 across sequential element (u_core/\instr_id_reg[1] )
+---------------------------------------------------------------------------------
+Finished Cross Boundary and Area Optimization : Time (s): cpu = 00:05:06 ; elapsed = 00:05:04 . Memory (MB): peak = 4461.207 ; gain = 2727.672 ; free physical = 976 ; free virtual = 8121
+---------------------------------------------------------------------------------
+ Sort Area is brv32p_soc__GC0 mul_su_6 : 0 0 : 2701 5479 : Used 1 time 0
+ Sort Area is brv32p_soc__GC0 mul_su_6 : 0 1 : 2778 5479 : Used 1 time 0
+ Sort Area is brv32p_soc__GC0 mul_uu_a : 0 0 : 2701 5479 : Used 1 time 0
+ Sort Area is brv32p_soc__GC0 mul_uu_a : 0 1 : 2778 5479 : Used 1 time 0
+ Sort Area is brv32p_soc__GC0 mul_uu_b : 0 0 : 2759 5418 : Used 1 time 0
+ Sort Area is brv32p_soc__GC0 mul_uu_b : 0 1 : 2659 5418 : Used 1 time 0
+ Sort Area is brv32p_soc__GC0 mul_ss_0 : 0 0 : 2701 4861 : Used 1 time 0
+ Sort Area is brv32p_soc__GC0 mul_ss_0 : 0 1 : 2160 4861 : Used 1 time 0
+ Sort Area is brv32p_soc__GC0 mul_su_8 : 0 0 : 2158 4701 : Used 1 time 0
+ Sort Area is brv32p_soc__GC0 mul_su_8 : 0 1 : 2543 4701 : Used 1 time 0
+ Sort Area is brv32p_soc__GC0 mul_ss_3 : 0 0 : 2158 3958 : Used 1 time 0
+ Sort Area is brv32p_soc__GC0 mul_ss_3 : 0 1 : 1800 3958 : Used 1 time 0
+---------------------------------------------------------------------------------
+Start ROM, RAM, DSP, Shift Register and Retiming Reporting
+---------------------------------------------------------------------------------
+
+DSP: Preliminary Mapping Report (see note below. The ' indicates corresponding REG is set)
++------------+----------------+--------+--------+--------+--------+--------+------+------+------+------+-------+------+------+
+|Module Name | DSP Mapping    | A Size | B Size | C Size | D Size | P Size | AREG | BREG | CREG | DREG | ADREG | MREG | PREG | 
++------------+----------------+--------+--------+--------+--------+--------+------+------+------+------+-------+------+------+
+|muldiv      | A*B            | 18     | 16     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | (PCIN>>17)+A*B | 16     | 16     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | A*B            | 18     | 18     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | (PCIN>>17)+A*B | 18     | 16     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | A*B            | 18     | 15     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | (PCIN>>17)+A*B | 16     | 15     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | A*B            | 18     | 18     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | (PCIN>>17)+A*B | 18     | 16     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | A*B            | 18     | 15     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | (PCIN>>17)+A*B | 15     | 15     | -      | -      | 30     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | A*B            | 18     | 18     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | (PCIN>>17)+A*B | 18     | 15     | -      | -      | 47     | 0    | 0    | -    | -    | -     | 0    | 0    | 
++------------+----------------+--------+--------+--------+--------+--------+------+------+------+------+-------+------+------+
+
+Note: The table above is a preliminary report that shows the DSPs inferred at the current stage of the synthesis flow. Some DSP may be reimplemented as non DSP primitives later in the synthesis flow. Multiple instantiated DSPs are reported only once.
+---------------------------------------------------------------------------------
+Finished ROM, RAM, DSP, Shift Register and Retiming Reporting
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Applying XDC Timing Constraints
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Applying XDC Timing Constraints : Time (s): cpu = 00:05:23 ; elapsed = 00:05:27 . Memory (MB): peak = 4461.207 ; gain = 2727.672 ; free physical = 195 ; free virtual = 6988
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Timing Optimization
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Timing Optimization : Time (s): cpu = 00:06:27 ; elapsed = 00:06:33 . Memory (MB): peak = 4461.207 ; gain = 2727.672 ; free physical = 204 ; free virtual = 6765
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Technology Mapping
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Technology Mapping : Time (s): cpu = 00:06:58 ; elapsed = 00:07:24 . Memory (MB): peak = 4473.418 ; gain = 2739.883 ; free physical = 191 ; free virtual = 4704
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start IO Insertion
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Flattening Before IO Insertion
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Flattening Before IO Insertion
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Final Netlist Cleanup
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Final Netlist Cleanup
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished IO Insertion : Time (s): cpu = 00:07:24 ; elapsed = 00:07:51 . Memory (MB): peak = 4473.418 ; gain = 2739.883 ; free physical = 167 ; free virtual = 4677
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Renaming Generated Instances
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Renaming Generated Instances : Time (s): cpu = 00:07:24 ; elapsed = 00:07:51 . Memory (MB): peak = 4473.418 ; gain = 2739.883 ; free physical = 167 ; free virtual = 4677
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Rebuilding User Hierarchy
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Rebuilding User Hierarchy : Time (s): cpu = 00:07:41 ; elapsed = 00:08:08 . Memory (MB): peak = 4473.418 ; gain = 2739.883 ; free physical = 198 ; free virtual = 4678
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Renaming Generated Ports
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Renaming Generated Ports : Time (s): cpu = 00:07:42 ; elapsed = 00:08:09 . Memory (MB): peak = 4473.418 ; gain = 2739.883 ; free physical = 198 ; free virtual = 4678
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Handling Custom Attributes
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Handling Custom Attributes : Time (s): cpu = 00:07:48 ; elapsed = 00:08:16 . Memory (MB): peak = 4473.418 ; gain = 2739.883 ; free physical = 197 ; free virtual = 4676
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Renaming Generated Nets
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Renaming Generated Nets : Time (s): cpu = 00:07:49 ; elapsed = 00:08:16 . Memory (MB): peak = 4473.418 ; gain = 2739.883 ; free physical = 197 ; free virtual = 4676
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Writing Synthesis Report
+---------------------------------------------------------------------------------
+
+DSP Final Report (the ' indicates corresponding REG is set)
++------------+--------------+--------+--------+--------+--------+--------+------+------+------+------+-------+------+------+
+|Module Name | DSP Mapping  | A Size | B Size | C Size | D Size | P Size | AREG | BREG | CREG | DREG | ADREG | MREG | PREG | 
++------------+--------------+--------+--------+--------+--------+--------+------+------+------+------+-------+------+------+
+|muldiv      | A*B          | 17     | 15     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | PCIN>>17+A*B | 15     | 15     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | A*B          | 17     | 17     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | PCIN>>17+A*B | 17     | 15     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | A*B          | 17     | 18     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | PCIN>>17+A*B | 15     | 18     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | A*B          | 17     | 17     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | PCIN>>17+A*B | 17     | 15     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | A*B          | 17     | 18     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | PCIN>>17+A*B | 30     | 18     | -      | -      | 30     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | A*B          | 17     | 17     | -      | -      | 48     | 0    | 0    | -    | -    | -     | 0    | 0    | 
+|muldiv      | PCIN>>17+A*B | 17     | 18     | -      | -      | 47     | 0    | 0    | -    | -    | -     | 0    | 0    | 
++------------+--------------+--------+--------+--------+--------+--------+------+------+------+------+-------+------+------+
+
+
+Report BlackBoxes: 
++-+--------------+----------+
+| |BlackBox name |Instances |
++-+--------------+----------+
++-+--------------+----------+
+
+Report Cell Usage: 
++------+--------+------+
+|      |Cell    |Count |
++------+--------+------+
+|1     |BUFG    |     1|
+|2     |CARRY4  |   207|
+|3     |DSP48E1 |    12|
+|4     |LUT1    |   130|
+|5     |LUT2    |  2898|
+|6     |LUT3    |   715|
+|7     |LUT4    |  3456|
+|8     |LUT5    |  2155|
+|9     |LUT6    | 34804|
+|10    |MUXF7   | 10093|
+|11    |MUXF8   |  4944|
+|12    |FDCE    |  9773|
+|13    |FDPE    |   322|
+|14    |FDRE    | 68434|
+|15    |IBUF    |    35|
+|16    |OBUF    |    33|
++------+--------+------+
+---------------------------------------------------------------------------------
+Finished Writing Synthesis Report : Time (s): cpu = 00:07:49 ; elapsed = 00:08:16 . Memory (MB): peak = 4473.418 ; gain = 2739.883 ; free physical = 197 ; free virtual = 4676
+---------------------------------------------------------------------------------
+Synthesis finished with 0 errors, 0 critical warnings and 46 warnings.
+Synthesis Optimization Runtime : Time (s): cpu = 00:07:15 ; elapsed = 00:07:55 . Memory (MB): peak = 4473.418 ; gain = 2449.676 ; free physical = 7420 ; free virtual = 11968
+Synthesis Optimization Complete : Time (s): cpu = 00:07:52 ; elapsed = 00:08:26 . Memory (MB): peak = 4473.418 ; gain = 2739.883 ; free physical = 7440 ; free virtual = 11968
+INFO: [Project 1-571] Translating synthesized netlist
+Netlist sorting complete. Time (s): cpu = 00:00:01 ; elapsed = 00:00:01 . Memory (MB): peak = 4473.418 ; gain = 0.000 ; free physical = 7428 ; free virtual = 11970
+INFO: [Netlist 29-17] Analyzing 15256 Unisim elements for replacement
+INFO: [Netlist 29-28] Unisim Transformation completed in 0 CPU seconds
+INFO: [Project 1-570] Preparing netlist for logic optimization
+Parsing XDC File [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs/clock.xdc]
+Finished Parsing XDC File [/home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs/clock.xdc]
+INFO: [Opt 31-138] Pushed 0 inverter(s) to 0 load pin(s).
+Netlist sorting complete. Time (s): cpu = 00:00:00.05 ; elapsed = 00:00:00.04 . Memory (MB): peak = 4493.918 ; gain = 0.000 ; free physical = 7385 ; free virtual = 11965
+INFO: [Project 1-111] Unisim Transformation Summary:
+No Unisim elements were transformed.
+
+Synth Design complete | Checksum: 686705f4
+INFO: [Common 17-83] Releasing license: Synthesis
+171 Infos, 216 Warnings, 1 Critical Warnings and 0 Errors encountered.
+synth_design completed successfully
+synth_design: Time (s): cpu = 00:08:22 ; elapsed = 00:08:58 . Memory (MB): peak = 4493.953 ; gain = 2881.559 ; free physical = 7384 ; free virtual = 11965
+INFO: [Common 17-2834] synth_design peak Physical Memory [PSS] (MB): overall = 10572.512; main = 3401.790; forked = 7749.746
+INFO: [Common 17-2834] synth_design peak Virtual Memory [VSS] (MB): overall = 17284.031; main = 4493.922; forked = 12814.531
+# report_utilization -file /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs/utilization_brv32p_soc.rpt
+# report_timing_summary -file /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs/timing_brv32p_soc.rpt
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -1, Delay Type: min_max.
+INFO: [Timing 38-191] Multithreading enabled for timing update using a maximum of 4 CPUs
+report_timing_summary: Time (s): cpu = 00:01:35 ; elapsed = 00:00:43 . Memory (MB): peak = 4493.953 ; gain = 0.000 ; free physical = 7091 ; free virtual = 11709
+INFO: [Common 17-206] Exiting Vivado at Thu Mar 19 16:53:05 2026...

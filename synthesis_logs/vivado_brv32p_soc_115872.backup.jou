@@ -1,0 +1,24 @@
+#-----------------------------------------------------------
+# Vivado v2025.2 (64-bit)
+# SW Build 6299465 on Fri Nov 14 12:34:56 MST 2025
+# IP Build 6300035 on Fri Nov 14 10:48:45 MST 2025
+# SharedData Build 6298862 on Thu Nov 13 04:50:51 MST 2025
+# Start of session at: Thu Mar 19 16:06:28 2026
+# Process ID         : 115872
+# Current directory  : /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs
+# Command line       : vivado -mode batch -source synth_brv32p_soc.tcl -log vivado_brv32p_soc.log -journal vivado_brv32p_soc.jou
+# Log file           : /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs/vivado_brv32p_soc.log
+# Journal file       : /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs/vivado_brv32p_soc.jou
+# Running On         : bren-ubuntu24-04
+# Platform           : Ubuntu
+# Operating System   : Ubuntu 24.04.4 LTS
+# Processor Detail   : Intel(R) Core(TM) i7-3770 CPU @ 3.40GHz
+# CPU Frequency      : 3691.745 MHz
+# CPU Physical cores : 4
+# CPU Logical cores  : 8
+# Host memory        : 16630 MB
+# Swap memory        : 4294 MB
+# Total Virtual      : 20925 MB
+# Available Virtual  : 8914 MB
+#-----------------------------------------------------------
+source synth_brv32p_soc.tcl

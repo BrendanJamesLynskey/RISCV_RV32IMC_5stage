@@ -1,0 +1,50 @@
+#-----------------------------------------------------------
+# Vivado v2025.2 (64-bit)
+# SW Build 6299465 on Fri Nov 14 12:34:56 MST 2025
+# IP Build 6300035 on Fri Nov 14 10:48:45 MST 2025
+# SharedData Build 6298862 on Thu Nov 13 04:50:51 MST 2025
+# Start of session at: Thu Mar 19 16:05:58 2026
+# Process ID         : 114928
+# Current directory  : /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs
+# Command line       : vivado -mode batch -source synth_brv32p_soc.tcl -log vivado_brv32p_soc.log -journal vivado_brv32p_soc.jou
+# Log file           : /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs/vivado_brv32p_soc.log
+# Journal file       : /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/synthesis_logs/vivado_brv32p_soc.jou
+# Running On         : bren-ubuntu24-04
+# Platform           : Ubuntu
+# Operating System   : Ubuntu 24.04.4 LTS
+# Processor Detail   : Intel(R) Core(TM) i7-3770 CPU @ 3.40GHz
+# CPU Frequency      : 3715.813 MHz
+# CPU Physical cores : 4
+# CPU Logical cores  : 8
+# Host memory        : 16630 MB
+# Swap memory        : 4294 MB
+# Total Virtual      : 20925 MB
+# Available Virtual  : 11760 MB
+#-----------------------------------------------------------
+source synth_brv32p_soc.tcl
+# create_project -in_memory -part xc7a35tcpg236-1
+# set_property verilog_define {} [current_fileset]
+# read_verilog [list \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/brv32p_soc.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/brv32p_core.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/decoder.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/compressed_decoder.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/alu.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/regfile.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/muldiv.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/branch_predictor.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/hazard_unit.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/core/csr.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/icache.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/cache/dcache.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_interconnect.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_sram.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/bus/axi_periph_bridge.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/gpio.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/uart.v \
+#     /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/periph/timer.v \
+# ]
+# set_property include_dirs [list /home/brendan/synthesis_workspace/RISCV_RV32IMC_5stage/rtl/pkg] [current_fileset]
+# set_property top brv32p_soc [current_fileset]
+ERROR: [Common 17-53] User Exception: No open design. Please open an elaborated, synthesized or implemented design before executing this command.
+INFO: [Common 17-206] Exiting Vivado at Thu Mar 19 16:06:06 2026...

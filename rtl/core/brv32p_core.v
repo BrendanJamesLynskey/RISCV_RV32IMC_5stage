@@ -295,7 +295,11 @@ module brv32p_core (
   wire actual_taken;
   assign actual_taken = branch_taken_ex || ctrl_ex[`CTRL_JAL] || ctrl_ex[`CTRL_JALR];
 
-  assign branch_mispredict_ex = is_branch_or_jump &&
+  // Redirects (mispredict here, MRET below, traps in MEM) act only on a cycle
+  // when the pipeline advances. During a memory stall the EX and MEM
+  // instructions are held, so acting early would flush the branch or jump
+  // itself while its redirect is lost (the PC does not load while stalled).
+  assign branch_mispredict_ex = !mem_stall && is_branch_or_jump &&
     ((actual_taken != pred_taken_ex) ||
      (actual_taken && (branch_target_computed != pc_ex + pc_inc_ex)));
 
@@ -303,13 +307,13 @@ module brv32p_core (
                             (pc_ex + pc_inc_ex);
 
   // Branch predictor update
-  assign bp_update_en     = (ctrl_ex[`CTRL_BR_TYPE] != BR_NONE);
+  assign bp_update_en     = !mem_stall && (ctrl_ex[`CTRL_BR_TYPE] != BR_NONE);  // once per branch
   assign bp_update_pc     = pc_ex;
   assign bp_update_taken  = branch_taken_ex;
   assign bp_update_target = branch_target_computed;
 
   // MRET
-  assign mret_ex = ctrl_ex[`CTRL_MRET];
+  assign mret_ex = !mem_stall && ctrl_ex[`CTRL_MRET];  // mstatus update once
 
   // EX result select
   reg [31:0] ex_result;
@@ -318,6 +322,7 @@ module brv32p_core (
       WB_ALU:    ex_result = alu_result_ex;
       WB_PC4:    ex_result = pc_ex + pc_inc_ex;
       WB_MULDIV: ex_result = muldiv_result;
+      WB_AUIPC:  ex_result = auipc_result;
       default:   ex_result = alu_result_ex;
     endcase
   end
@@ -366,8 +371,9 @@ module brv32p_core (
   wire        irq_pending;
   wire [31:0] csr_rdata;
 
-  assign trap_enter = ctrl_mem[`CTRL_ECALL] || ctrl_mem[`CTRL_EBREAK] ||
-                      ctrl_mem[`CTRL_ILLEGAL] || irq_pending;
+  assign trap_enter = !mem_stall &&
+                      (ctrl_mem[`CTRL_ECALL] || ctrl_mem[`CTRL_EBREAK] ||
+                       ctrl_mem[`CTRL_ILLEGAL] || irq_pending);
 
   reg [31:0] trap_cause, trap_val;
   always @(*) begin
@@ -432,7 +438,7 @@ module brv32p_core (
   csr u_csr (
     .clk           (clk),
     .rst_n         (rst_n),
-    .csr_en        (ctrl_mem[`CTRL_CSR_EN] && !trap_enter),
+    .csr_en        (ctrl_mem[`CTRL_CSR_EN] && !trap_enter && !mem_stall),  // write once; read value is the old one
     .csr_addr      (ctrl_mem[`CTRL_CSR_ADDR]),
     .csr_op        (ctrl_mem[`CTRL_CSR_OP]),
     .csr_wdata     (csr_wdata),
@@ -468,6 +474,7 @@ module brv32p_core (
     .wb_reg_wr        (ctrl_wb[`CTRL_REG_WR]),
     .branch_mispredict(branch_mispredict_ex || trap_enter || mret_ex),
     .jump_ex          (ctrl_ex[`CTRL_JAL] || ctrl_ex[`CTRL_JALR]),
+    .trap             (trap_enter),
     .muldiv_busy      (muldiv_busy),
     .fwd_rs1          (fwd_rs1),
     .fwd_rs2          (fwd_rs2),

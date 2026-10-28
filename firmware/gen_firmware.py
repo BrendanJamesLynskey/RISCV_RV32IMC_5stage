@@ -34,6 +34,7 @@ def j_type(imm, rd, opcode=0x6F):
 x0, x1, x2, x3, x4, x5, x6, x7 = 0, 1, 2, 3, 4, 5, 6, 7
 x8, x9, x10, x11, x12, x13, x14, x15 = 8, 9, 10, 11, 12, 13, 14, 15
 x16, x17, x18, x19, x20, x21, x22, x23 = 16, 17, 18, 19, 20, 21, 22, 23
+x24, x25, x26 = 24, 25, 26
 
 def addi(rd, rs1, imm):  return i_type(imm, rs1, 0, rd, 0x13)
 def add(rd, rs1, rs2):   return r_type(0x00, rs2, rs1, 0, rd, 0x33)
@@ -82,7 +83,7 @@ program = [
     slt(x19, x2, x1),          # 0x28: x19 = 1 (10 < 42)
 
     # ── Load/Store Tests ─────────────────────────────────────────
-    lui(x10, 0x10000000),       # 0x2C: x10 = 0x10000000 (DMEM base)
+    lui(x10, 0x00004000),       # 0x2C: x10 = 0x00004000 (data, 16 KB into the SRAM, clear of the code)
     sw(x3, 0, x10),             # 0x30: DMEM[0] = 52
     lw(x11, 0, x10),            # 0x34: x11 = 52
     sb(x6, 4, x10),             # 0x38: DMEM[4] = 0x55
@@ -106,9 +107,7 @@ program = [
     jal(x16, 8),                # 0x68: Jump to 0x70, x16 = 0x6C
     addi(x17, x0, 0xDE),        # 0x6C: DEAD CODE
     addi(x17, x0, 3),           # 0x70: x17 = 3 (JAL target)
-    jalr(x20, x16, 0),          # 0x74: Jump to x16 (0x6C), x20 = 0x78
-    # Falls through to the dead code at 0x6C which will execute addi x17, x0, 0xDE
-    # Then continues. Let's adjust: JALR to a forward address instead.
+    jalr(x20, x16, 12),         # 0x74: Jump to x16 + 12 = 0x78, x20 = 0x78
 
     # ── UART Setup ───────────────────────────────────────────────
     lui(x20, 0x20000000),       # 0x78: x20 = 0x20000000
@@ -132,16 +131,15 @@ program = [
     # ── CSR test ─────────────────────────────────────────────────
     csrrs(x21, 0xB00, x0),      # 0xA8: Read mcycle into x21
 
-    # ── Done: ECALL then spin ────────────────────────────────────
-    ecall(),                    # 0xAC: Trap
-    nop(),                      # 0xB0: NOP
-    jal(x0, -4),                # 0xB4: Spin forever → 0xB0
-]
+    # ── Load-use: the loaded value is used by the very next instruction
+    lw(x24, 0, x10),            # 0xAC: x24 = 52 (stored at 0x30)
+    addi(x25, x24, 1),          # 0xB0: x25 = 53 only if the load-use stall works
 
-# Fix the JALR: make it jump forward to UART setup instead
-# Patch instruction at index 18 (0x74): jalr x20, x16, 0
-# x16 will hold 0x6C from the JAL. jalr x20, x16, 12 → 0x6C + 12 = 0x78
-program[18] = jalr(x20, x16, 12)  # Jump to 0x78
+    # ── Done: ECALL; the instruction after it must not execute ───
+    ecall(),                    # 0xB4: Trap (mtvec = 0, so the program restarts)
+    addi(x26, x0, 0x77),        # 0xB8: never executes if traps are precise
+    jal(x0, -4),                # 0xBC: Spin forever → 0xB8
+]
 
 import os
 outpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "firmware.hex")

@@ -60,9 +60,7 @@ module decoder (
 
       OP_AUIPC: begin
         ctrl[`CTRL_REG_WR]  = 1'b1;
-        ctrl[`CTRL_ALU_OP]  = ALU_ADD;
-        ctrl[`CTRL_ALU_SRC] = 1'b1;
-        ctrl[`CTRL_WB_SEL]  = WB_ALU;
+        ctrl[`CTRL_WB_SEL]  = WB_AUIPC;  // pc + imm, computed in EX
       end
 
       OP_JAL: begin

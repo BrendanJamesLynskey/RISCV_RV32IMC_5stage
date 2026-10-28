@@ -46,7 +46,7 @@ module tb_brv32p_soc;
   initial begin pass_cnt = 0; fail_cnt = 0; test_num = 0; end
 
   task check;
-    input [255:0] name;
+    input [1023:0] name;
     input [31:0] actual;
     input [31:0] expected;
     begin
@@ -62,7 +62,7 @@ module tb_brv32p_soc;
   endtask
 
   task check_nonzero;
-    input [255:0] name;
+    input [1023:0] name;
     input [31:0] actual;
     begin
       test_num = test_num + 1;
@@ -84,7 +84,7 @@ module tb_brv32p_soc;
     end
   endtask
 
-  // Wait for a register to reach a specific value
+  // Wait for a register to reach a specific value; a timeout is a failure
   task wait_reg;
     input integer reg_idx;
     input [31:0] val;
@@ -96,10 +96,33 @@ module tb_brv32p_soc;
         @(posedge clk);
         cnt = cnt + 1;
       end
-      if (cnt >= timeout)
-        $display("[WARN] Timeout waiting for x%0d = 0x%08h (current: 0x%08h)", reg_idx, val, get_reg(reg_idx));
+      if (cnt >= timeout) begin
+        test_num = test_num + 1;
+        fail_cnt = fail_cnt + 1;
+        $display("[FAIL] #%0d Timeout waiting for x%0d = 0x%08h (current: 0x%08h)", test_num, reg_idx, val, get_reg(reg_idx));
+      end
     end
   endtask
+
+  // UART monitor: decodes each 8N1 byte the DUT transmits.
+  // Bit period is clk_div + 1 cycles (see uart.v TX state machine).
+  reg  [7:0] uart_byte;
+  integer    uart_count, uart_period, ub;
+  initial begin uart_count = 0; uart_byte = 8'h00; end
+
+  always @(negedge uart_tx) if (rst_n) begin
+    uart_period = `UART.clk_div + 1;
+    run(uart_period / 2);
+    if (uart_tx === 1'b0) begin
+      for (ub = 0; ub < 8; ub = ub + 1) begin
+        run(uart_period);
+        uart_byte[ub] = uart_tx;
+      end
+      run(uart_period);
+      if (uart_tx === 1'b1) uart_count = uart_count + 1;
+      else $display("[WARN] UART framing error (no stop bit)");
+    end
+  end
 
   // ── Main Test ─────────────────────────────────────────────────────────
   integer valid_count, trained, s_idx, w_idx, bp_idx;
@@ -154,29 +177,35 @@ module tb_brv32p_soc;
     $display("\n--- Test: JAL ---");
     wait_reg(17, 32'd3, 50000);
     check("JAL target: x17=3", get_reg(17), 32'd3);
-    if (get_reg(16) !== 32'd0) begin
-      $display("[PASS] #%0d JAL link: x16 = 0x%08h (nonzero)", test_num+1, get_reg(16));
-      pass_cnt = pass_cnt + 1; test_num = test_num + 1;
-    end else begin
-      $display("[INFO] #%0d JAL link: x16 = 0 (JAL instruction not reached in firmware flow)", test_num+1);
-      test_num = test_num + 1;
-    end
+    check("JAL link: x16=0x6C", get_reg(16), 32'h6C);
 
-    // ── Loop (tests branch prediction training) ─────────────────────
-    $display("\n--- Test: Loop (BNE countdown, BP training) ---");
-    wait_reg(23, 32'd0, 100000);
-    check("Loop x23=0", get_reg(23), 32'd0);
+    // ── Program completion ──────────────────────────────────────────
+    // AUIPC at 0xA4 runs only after the countdown loop has finished, so
+    // x20 = 0xA4 proves the whole program executed in order.
+    $display("\n--- Test: Loop (BNE countdown, BP training) and completion ---");
+    wait_reg(20, 32'h0000_00A4, 100000);
+    check("AUIPC x20=0xA4 (program reached its end)", get_reg(20), 32'h0000_00A4);
+    // x23 resets to 0, so the loop result only counts once the end is reached
+    check("Loop finished: x23=0 at program end",
+          (get_reg(20) === 32'h0000_00A4) ? get_reg(23) : 32'hFFFF_FFFF, 32'd0);
+    run(5);   // let the CSRRS after the AUIPC reach writeback
+    // x21 held 8 (the UART divider) before the CSRRS, so require a real cycle count
+    check("CSRRS read mcycle into x21 (> 100 cycles)", (get_reg(21) > 32'd100), 32'd1);
+    run(50);
+    check("Load-use: x25 = x24 + 1 = 53", get_reg(25), 32'd53);
+    check("ECALL trapped: mcause=11", `CSR.mcause, 32'd11);
+    check("ECALL is precise: the instruction after it did not run (x26 != 0x77)",
+          (get_reg(26) !== 32'h77), 32'd1);
 
     // ── GPIO ────────────────────────────────────────────────────────
     $display("\n--- Test: GPIO Output ---");
-    run(1000);
-    if ((gpio_out & 32'hFF) != 32'd0) begin
-      $display("[PASS] #%0d GPIO output active: 0x%08h", test_num+1, gpio_out);
-      pass_cnt = pass_cnt + 1; test_num = test_num + 1;
-    end else begin
-      $display("[INFO] #%0d GPIO output = 0x%08h (may not have reached via AXI yet)", test_num+1, gpio_out);
-      test_num = test_num + 1;
-    end
+    check("GPIO output = 52 (DIR=0xFF, OUT=52)", gpio_out, 32'd52);
+
+    // ── UART ────────────────────────────────────────────────────────
+    $display("\n--- Test: UART TX ---");
+    run(2000);
+    check_nonzero("UART bytes received", uart_count);
+    check("UART byte = 'H'", {24'b0, uart_byte}, 32'h48);
 
     // ── GPIO Input ──────────────────────────────────────────────────
     $display("\n--- Test: GPIO Input ---");

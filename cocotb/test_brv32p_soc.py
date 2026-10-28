@@ -10,7 +10,15 @@ from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, ClockCycles
 
 
+DATA_WORD = 0x4000 // 4   # firmware data area (0x0000_4000) as an SRAM word index
+END_PC_X20 = 0xA4         # AUIPC x20 at 0xA4 runs only once the whole program has run
+
+
 async def reset_dut(dut, cycles=10):
+    # All tests share one simulation and the SRAM is not reset, so clear the
+    # data words; otherwise a broken store could pass on a previous test's data.
+    for i in range(2):
+        dut.u_sram.mem[DATA_WORD + i].value = 0
     dut.rst_n.value = 0
     dut.gpio_in.value = 0
     dut.uart_rx.value = 1
@@ -32,7 +40,7 @@ async def wait_reg(dut, idx, val, timeout=50000):
         try:
             if get_reg(dut, idx) == val:
                 return True
-        except Exception:
+        except ValueError:   # X or Z before the register is first written
             pass
     dut._log.warning(f"Timeout waiting for x{idx} = 0x{val:08X}")
     return False
@@ -45,7 +53,7 @@ async def wait_reg_nonzero(dut, idx, timeout=50000):
         try:
             if get_reg(dut, idx) != 0:
                 return True
-        except Exception:
+        except ValueError:   # X or Z before the register is first written
             pass
     return False
 
@@ -55,7 +63,7 @@ async def wait_reg_nonzero(dut, idx, timeout=50000):
 @cocotb.test()
 async def test_01_reset(dut):
     """Verify PC starts at reset vector."""
-    clock = Clock(dut.clk, 10, units="ns")
+    clock = Clock(dut.clk, 10, unit="ns")
     cocotb.start_soon(clock.start())
     dut.rst_n.value = 0
     dut.gpio_in.value = 0
@@ -69,13 +77,13 @@ async def test_01_reset(dut):
 @cocotb.test()
 async def test_02_alu_pipeline(dut):
     """Test ALU instructions execute correctly through pipeline with forwarding."""
-    clock = Clock(dut.clk, 10, units="ns")
+    clock = Clock(dut.clk, 10, unit="ns")
     cocotb.start_soon(clock.start())
     await reset_dut(dut)
 
-    # Wait for first results to appear in register file
-    ok = await wait_reg(dut, 3, 52)
-    assert ok, "x3 never reached 52"
+    # Wait for the last of the checked results (SRLI x9) to reach the register file
+    ok = await wait_reg(dut, 9, 40)
+    assert ok, "x9 never reached 40"
 
     checks = [
         (1, 42, "ADDI"), (2, 10, "ADDI"), (3, 52, "ADD"),
@@ -91,7 +99,7 @@ async def test_02_alu_pipeline(dut):
 @cocotb.test()
 async def test_03_forwarding(dut):
     """Verify data forwarding: ADD x3=x1+x2 uses freshly-written x1, x2."""
-    clock = Clock(dut.clk, 10, units="ns")
+    clock = Clock(dut.clk, 10, unit="ns")
     cocotb.start_soon(clock.start())
     await reset_dut(dut)
 
@@ -103,7 +111,7 @@ async def test_03_forwarding(dut):
 @cocotb.test()
 async def test_04_load_store_cache(dut):
     """Test load/store through the D-cache."""
-    clock = Clock(dut.clk, 10, units="ns")
+    clock = Clock(dut.clk, 10, unit="ns")
     cocotb.start_soon(clock.start())
     await reset_dut(dut)
 
@@ -119,7 +127,7 @@ async def test_04_load_store_cache(dut):
 @cocotb.test()
 async def test_05_branches(dut):
     """Test BEQ/BNE through pipeline with prediction."""
-    clock = Clock(dut.clk, 10, units="ns")
+    clock = Clock(dut.clk, 10, unit="ns")
     cocotb.start_soon(clock.start())
     await reset_dut(dut)
 
@@ -131,36 +139,32 @@ async def test_05_branches(dut):
 @cocotb.test()
 async def test_06_jal(dut):
     """Test JAL saves link and reaches target."""
-    clock = Clock(dut.clk, 10, units="ns")
+    clock = Clock(dut.clk, 10, unit="ns")
     cocotb.start_soon(clock.start())
     await reset_dut(dut)
 
     ok = await wait_reg(dut, 17, 3)
     assert ok, "JAL target not reached"
-    assert get_reg(dut, 16) != 0, "JAL link register is zero"
+    assert get_reg(dut, 16) == 0x6C, f"JAL link x16 = 0x{get_reg(dut, 16):08X}, expected 0x6C"
     dut._log.info(f"PASS: JAL — x17={get_reg(dut, 17)}, x16=0x{get_reg(dut, 16):08X}")
 
 
 @cocotb.test()
 async def test_07_loop_bp_training(dut):
     """Test BNE countdown loop trains the branch predictor."""
-    clock = Clock(dut.clk, 10, units="ns")
+    clock = Clock(dut.clk, 10, unit="ns")
     cocotb.start_soon(clock.start())
     await reset_dut(dut)
 
-    ok = await wait_reg(dut, 23, 0, timeout=100000)
-    assert ok, "Loop did not complete"
-    dut._log.info("PASS: Countdown loop x23 = 0")
+    # x23 resets to 0, so wait for the program's end (after the loop) instead
+    ok = await wait_reg(dut, 20, END_PC_X20, timeout=100000)
+    assert ok, "Program did not reach AUIPC at 0xA4 (AUIPC result wrong, or earlier hang)"
+    assert get_reg(dut, 23) == 0, f"Loop counter x23 = {get_reg(dut, 23)}"
+    dut._log.info("PASS: Countdown loop x23 = 0 at program end")
 
     # Check BHT was trained
-    trained = 0
-    for i in range(256):
-        try:
-            val = int(dut.u_core.u_bp.bht[i].value)
-            if val != 1:  # Default is 2'b01
-                trained += 1
-        except Exception:
-            pass
+    bht = dut.u_core.u_bp.bht
+    trained = sum(1 for i in range(len(bht)) if int(bht[i].value) != 1)  # reset value 2'b01
     assert trained > 0, "No BHT entries trained"
     dut._log.info(f"PASS: BHT has {trained} trained entries")
 
@@ -168,20 +172,15 @@ async def test_07_loop_bp_training(dut):
 @cocotb.test()
 async def test_08_icache(dut):
     """Verify I-cache fills lines during execution."""
-    clock = Clock(dut.clk, 10, units="ns")
+    clock = Clock(dut.clk, 10, unit="ns")
     cocotb.start_soon(clock.start())
     await reset_dut(dut)
 
     await wait_reg(dut, 3, 52)  # Wait for some execution
 
-    valid_count = 0
-    for s in range(64):
-        for w in range(2):
-            try:
-                if int(dut.u_icache.valid_mem[s][w].value):
-                    valid_count += 1
-            except Exception:
-                pass
+    # Icarus exposes valid_mem[SETS][WAYS] as one flat array of SETS*WAYS bits
+    valid_mem = dut.u_icache.valid_mem
+    valid_count = sum(int(valid_mem[i].value) for i in range(len(valid_mem)))
 
     assert valid_count > 0, "I-cache has no valid lines"
     dut._log.info(f"PASS: I-cache has {valid_count} valid lines")
@@ -190,7 +189,7 @@ async def test_08_icache(dut):
 @cocotb.test()
 async def test_09_gpio_input(dut):
     """Test GPIO input synchronisation."""
-    clock = Clock(dut.clk, 10, units="ns")
+    clock = Clock(dut.clk, 10, unit="ns")
     cocotb.start_soon(clock.start())
     await reset_dut(dut)
     await ClockCycles(dut.clk, 20)
@@ -206,7 +205,7 @@ async def test_09_gpio_input(dut):
 @cocotb.test()
 async def test_10_csr_mcycle(dut):
     """Test mcycle counter increments."""
-    clock = Clock(dut.clk, 10, units="ns")
+    clock = Clock(dut.clk, 10, unit="ns")
     cocotb.start_soon(clock.start())
     await reset_dut(dut)
     await ClockCycles(dut.clk, 100)
@@ -218,34 +217,63 @@ async def test_10_csr_mcycle(dut):
 
 @cocotb.test()
 async def test_11_load_use_stall(dut):
-    """Verify pipeline doesn't corrupt data on load-use sequences."""
-    clock = Clock(dut.clk, 10, units="ns")
+    """Load-use: ADDI x25, x24, 1 straight after LW x24 must see the loaded 52."""
+    clock = Clock(dut.clk, 10, unit="ns")
     cocotb.start_soon(clock.start())
     await reset_dut(dut)
 
-    # The firmware has: SW x3, 0(x10) then LW x11, 0(x10)
-    # This is a load followed by use — the hazard unit should insert
-    # a 1-cycle bubble. If it doesn't, x11 would get stale data.
-    ok = await wait_reg(dut, 11, 52)
-    assert ok, "Load-use stall may have failed: x11 != 52"
+    # Firmware at 0xAC/0xB0: LW x24, 0(x10); ADDI x25, x24, 1.
+    # Without the load-use stall, x25 would be computed from a stale x24.
+    ok = await wait_reg(dut, 25, 53, timeout=100000)
+    assert ok, f"Load-use failed: x25 = {get_reg(dut, 25)}, expected 53"
     dut._log.info("PASS: Load-use stall correctly handled")
 
 
 @cocotb.test()
 async def test_12_pipeline_throughput(dut):
     """Measure approximate IPC by counting retired instructions vs cycles."""
-    clock = Clock(dut.clk, 10, units="ns")
+    clock = Clock(dut.clk, 10, unit="ns")
     cocotb.start_soon(clock.start())
     await reset_dut(dut)
 
-    # Wait for program to mostly complete
-    ok = await wait_reg(dut, 23, 0, timeout=100000)
+    ok = await wait_reg(dut, 20, END_PC_X20, timeout=100000)
+    assert ok, "Program did not reach its end"
 
     mcycle = int(dut.u_core.u_csr.mcycle.value) & 0xFFFFFFFF
     minstret = int(dut.u_core.u_csr.minstret.value) & 0xFFFFFFFF
 
-    if mcycle > 0 and minstret > 0:
-        ipc = minstret / mcycle
-        dut._log.info(f"PASS: Throughput — {minstret} instructions / {mcycle} cycles = {ipc:.3f} IPC")
+    # A sanity bound only: minstret is known to be inaccurate (it counts only
+    # some instruction types, and counts again on stalled cycles; see README)
+    assert 0 < minstret <= mcycle, f"minstret={minstret}, mcycle={mcycle}"
+    dut._log.info(f"PASS: {minstret} counted instructions / {mcycle} cycles = {minstret / mcycle:.3f}")
+
+
+@cocotb.test()
+async def test_13_precise_ecall(dut):
+    """ECALL traps with mcause = 11, and the instruction after it does not run."""
+    clock = Clock(dut.clk, 10, unit="ns")
+    cocotb.start_soon(clock.start())
+    await reset_dut(dut)
+
+    for _ in range(100000):
+        await RisingEdge(dut.clk)
+        if int(dut.u_core.u_csr.mcause.value) == 11:
+            break
     else:
-        dut._log.info(f"INFO: mcycle={mcycle}, minstret={minstret}")
+        assert False, "ECALL never trapped"
+    await ClockCycles(dut.clk, 20)
+    assert get_reg(dut, 26) != 0x77, "Imprecise trap: ADDI x26 after ECALL executed"
+    dut._log.info("PASS: ECALL trapped precisely (mcause = 11, x26 untouched)")
+
+
+@cocotb.test()
+async def test_14_gpio_output(dut):
+    """The firmware sets GPIO DIR = 0xFF and OUT = 52, so gpio_out = 52."""
+    clock = Clock(dut.clk, 10, unit="ns")
+    cocotb.start_soon(clock.start())
+    await reset_dut(dut)
+
+    ok = await wait_reg(dut, 20, END_PC_X20, timeout=100000)
+    assert ok, "Program did not reach its end"
+    assert int(dut.gpio_out.value) == 52, f"gpio_out = {int(dut.gpio_out.value)}"
+    dut._log.info("PASS: GPIO output = 52")

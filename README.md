@@ -92,6 +92,18 @@ RISCV_RV32IMC_5stage/
 ├── firmware/
 │   ├── firmware.hex                  # Pre-built firmware image
 │   └── gen_firmware.py               # Firmware generation script
+├── tests/
+│   ├── isa/
+│   │   ├── run_isa.sh                # Build and run the ISA tests (+ Spike lockstep)
+│   │   ├── tb_isa.v                  # ISA testbench: tohost detection, commit log
+│   │   ├── lockstep.py               # Compare the commit log with Spike's
+│   │   ├── elf2hex.py                # ELF image → $readmemh hex
+│   │   └── env/                      # Bare-metal test environment (riscv_test.h, link.ld)
+│   └── directed/                     # Own tests: FENCE.I, misaligned traps, interrupts
+├── scripts/
+│   ├── lint.sh                       # Verilator -Wall lint
+│   └── lint_waivers.vlt              # The waived rules, each with its reason
+├── .github/workflows/ci.yml          # CI: ISA + lockstep, testbenches, lint
 ├── doc/
 │   └── BRV32P_Design_Report.md       # Detailed micro-architecture write-up
 └── README.md
@@ -161,59 +173,86 @@ make
 
 ---
 
+### ISA tests, in lockstep with Spike
+
+```bash
+sudo apt install gcc-riscv64-unknown-elf iverilog
+tests/isa/run_isa.sh                     # every suite (riscv-tests is cloned on first use)
+tests/isa/run_isa.sh rv32ui/add rv32uc/rvc
+SPIKE=/path/to/spike tests/isa/run_isa.sh   # also compare each test with Spike
+```
+
+Each test is assembled with `riscv64-unknown-elf-gcc` and run on the SoC in Icarus. It reports pass or fail by a
+store to `tohost`, which the testbench sees on the core's retire trace. With Spike available, the same ELF also
+runs on Spike, and `lockstep.py` compares the two commit logs instruction by instruction: pc, encoding, register
+write and store. Any difference fails the test and is shown with context.
+
+### Lint
+
+```bash
+scripts/lint.sh                          # Verilator -Wall; waivers and reasons in scripts/lint_waivers.vlt
+```
+
 ## Verification status
 
-The verification is honest, but it is still small. Here is what is and is not covered today.
+| Suite | What it covers | Result |
+|---|---|---|
+| riscv-tests `rv32ui`, `rv32um`, `rv32uc` | Every RV32I, M and C instruction, with bypass and hazard cases | all pass |
+| The same `rv32ui`/`rv32um` sources assembled **with C** | Mixed 16/32-bit code: 32-bit instructions straddling words, branches sharing a word | all pass |
+| Directed (`tests/directed`) | FENCE.I on cached code; misaligned-access traps; timer interrupts (cause, and nothing lost or run twice) | all pass |
+| Lockstep with Spike | Every ISA and directed test except `timer_irq` (Spike has no timer), compared instruction by instruction | all match |
+| SoC testbench + cocotb | Directed SoC program: GPIO, UART byte, caches, predictor training, ECALL | 30/30, 14/14 |
+| Verilator lint | `-Wall`, with four documented waivers | clean |
 
-**Covered** by one directed program (`firmware/gen_firmware.py`, 48 RV32I instructions), checked by the Verilog
-testbench (30 checks) and the cocotb suite (14 tests):
-- ALU and immediate instructions;
-- EX→EX forwarding;
-- one load-use stall;
-- word and byte load and store through the D-cache;
-- BEQ, BNE, JAL (target and link) and JALR;
-- AUIPC;
-- a 100-iteration countdown loop;
-- CSRRS of `mcycle`;
-- ECALL (`mcause` = 11, and the trap is precise);
-- GPIO output and input;
-- one UART byte, decoded by the testbench;
-- I-cache fill and branch-predictor training.
+That is 101 applicable ISA tests. Three upstream tests are listed as not applicable, with reasons in
+`run_isa.sh`: `ma_data` twice (needs hardware misaligned access; this core traps, as the spec allows) and
+`fence_i` assembled with C (it overwrites compressed code). Spike behaves identically on all three. The directed
+tests were checked against mutants of the RTL with the behaviour removed, and each mutant fails.
 
 **Not yet covered:**
-- **The M and C extensions**: no multiply, divide or compressed instruction is executed by any test;
-- most of RV32I (halfwords, SLTU, SRA, other branch conditions);
-- interrupts;
-- illegal-instruction traps;
-- MRET;
-- D-cache eviction.
-
-**Known issues:**
-- `minstret` counts only instructions that write a register, store or ECALL, and it counts again on stalled
-  cycles.
-- On an interrupt, `mepc` points at the instruction in MEM, which still completes, so it would run twice after
-  MRET.
-- The 2-instruction countdown loop takes 4 cycles per iteration, so the predictor does not reach the ideal
-  2 cycles.
-
-**Planned:**
-- compiler-built ISA tests for I, M and C;
-- a per-cycle retire trace compared instruction by instruction against Spike;
-- CI.
+- external (GPIO/UART) interrupts;
+- nested interrupts;
+- D-cache eviction under load;
+- formal verification;
+- random instruction streams (riscv-dv).
 
 ## Bugs found and fixed
 
-When this core's verification was reviewed (October 2026), the original testbench printed `ALL TESTS PASSED`
-while hiding failures. Once every check counted, these bugs showed up. Each fix is its own commit:
+The core was reviewed in two passes in October 2026. Each fix is its own commit, with the failing test first
+where possible.
 
-| Bug | Symptom | Root cause | Caught by |
-|---|---|---|---|
-| Redirect during a memory stall | JAL never wrote its link register; its jump was lost | A mispredict flushed ID/EX during a memory stall, while the PC and EX/MEM were held, so the JAL was flushed out of EX. Traps, MRET, predictor updates and CSR writes also acted once per stalled cycle | JAL link check |
-| AUIPC | AUIPC returned a register value, not pc + imm | `auipc_result` was computed but never selected; AUIPC used the ALU as rs1 + imm | Program-end check (x20 at 0xA4) |
-| Imprecise traps | The instruction after ECALL executed | `flush_mem` was never driven, so the younger instruction reached MEM | Precise-trap check |
-| Firmware JALR | GPIO output stayed 0; the program looped | The "patch" wrote index 18 (0x48), not the JALR at 0x74 | GPIO and program-end checks |
-| Firmware data address | Stores overwrote the program | Data at `0x1000_0000` aliases SRAM address 0 | Memory-map review |
-| Hollow tests | Failures reported as INFO or passed on reset values | See the testbench and cocotb commits | Review |
+**Pass 1: making the directed testbench honest.** The original testbench printed `ALL TESTS PASSED` while
+hiding failures.
+
+| Bug | Symptom | Root cause |
+|---|---|---|
+| Redirect during a memory stall | JAL lost its link write and its jump | A mispredict flushed ID/EX while EX/MEM and the PC were held; traps, MRET, predictor updates and CSR writes also repeated on every stalled cycle |
+| AUIPC | Returned a register value | `pc + imm` computed but never selected |
+| Imprecise traps | The instruction after ECALL executed | `flush_mem` never driven |
+| Firmware | GPIO stayed 0; data overwrote code | JALR patched at the wrong index; data aliased onto the program |
+
+**Pass 2: ISA tests, then lockstep with Spike.** The first run passed 5 of 51 tests.
+
+| Bug | Symptom | Root cause |
+|---|---|---|
+| No WB→ID bypass | 38 of 51 tests failed | A register read in ID while its producer wrote back in WB got the old value |
+| Divider | Every DIV/REM wrong | The restoring step subtracted from the wrong bit window and ran 33 steps; `busy` rose a cycle late, so the divide left EX with 0; a stall could lose the result |
+| Load-use bubble during a stall | A load vanished | The bubble's flush was not gated by the memory stall |
+| RVC fetch | Compressed code ran garbage | No alignment: the high half of a word was never selected, and straddling 32-bit instructions never assembled |
+| Predictor aliasing | Infinite loop in C-assembled code | BHT/BTB ignored pc[1], so a branch's entry hit the instruction beside it, and a predicted-taken non-branch was never corrected |
+| CSR write data | `csrw mtvec, t0` wrote 2·t0 | The ALU added a register named by the CSR address bits |
+| CSR immediates | `csrsi mstatus, 8` did nothing | zimm taken from the rd field |
+| CSR forwarding | The instruction after `csrr` saw 0 | MEM forwarded the EX result, not the CSR value |
+| `mepc` alignment | MRET returned 2 bytes early | `mepc` forced to 4-byte alignment despite C |
+| Misaligned access | Silently wrong data | No check; it now traps (cause 4 or 6, with mtval) |
+| FENCE.I | Stale code ran after a patch | Decoded as a no-op; it now invalidates the I-cache |
+| Illegal compressed instructions | 0x0000 executed | `illegal_c` computed but never used |
+| Interrupt cause | Timer interrupts reported as external | mcause hard-wired to 11 |
+| Interrupt precision, `minstret` | An interrupted instruction could run twice; `minstret` counted wrongly | No per-stage valid bits; fixed with valid bits and a retire port |
+
+The test harness had bugs of its own, also fixed:
+- image paths over 128 characters were truncated, and the run continued on an all-NOP memory;
+- the final `tohost` store was missing from the trace.
 
 ## How this was built
 
@@ -224,15 +263,27 @@ and rebuilt its verification. That review found the bugs listed above, each fixe
 
 ### Hazard handling
 
-Load-use hazards insert a single bubble between the load instruction and its consumer. All other RAW hazards are resolved by forwarding from the EX/MEM or MEM/WB pipeline registers. There are no WAW or WAR hazards in an in-order pipeline.
+Load-use hazards insert a single bubble between the load and its consumer. Other RAW hazards are resolved by
+forwarding from EX/MEM and MEM/WB into EX, and by a write-through bypass in the register file (a read in ID sees a
+same-cycle write in WB). A CSR instruction's result is forwarded from MEM, where the CSR is read. Flushes and
+redirects act only on a cycle when the pipeline advances.
+
+### Instruction fetch and RV32C
+
+Memory returns aligned words. The IF stage picks the halfword at `pc[1]`. A 32-bit instruction that starts in the
+high half of a word is kept for a cycle, joined with the low half of the next word, and sent on (a bubble goes to
+ID meanwhile).
 
 ### Branch prediction
 
-The BHT uses a 2-bit saturating counter per entry and is indexed by the lower PC bits. The BTB caches the resolved target address. On a misprediction the two instructions fetched speculatively are flushed (2-cycle penalty).
+The BHT uses a 2-bit saturating counter per entry; the BHT and BTB are indexed and tagged by halfword address
+(`pc[31:1]`). The BTB caches the resolved target. A misprediction, including a taken prediction for an instruction
+that turns out not to be a branch, flushes the two younger instructions (2-cycle penalty).
 
 ### Cache coherence
 
-The D-cache uses a **write-through, no-write-allocate** policy. There is no hardware coherence protocol between I-cache and D-cache; software must flush the I-cache after writing self-modifying code.
+The D-cache uses a **write-through, no-write-allocate** policy, so memory is always up to date. FENCE.I invalidates
+the I-cache and refetches the next instruction, which makes code written by stores visible.
 
 ### AXI4-Lite interconnect
 
@@ -245,8 +296,8 @@ The 2M → 2S crossbar grants exclusive access to each slave on a fixed-priority
 - No virtual memory or privilege levels below Machine mode
 - UART baud rate is fixed at elaboration time (set in `brv32p_defs.vh`)
 - No DMA engine; peripheral access is polled or interrupt-driven
-- I-cache and D-cache are not coherent; self-modifying code requires a software cache flush sequence
-- Verification is a single directed program so far: see "Verification status" above
+- Misaligned loads and stores trap (cause 4/6) rather than being split in hardware
+- Interrupts: timer and one combined external line (GPIO | UART); no nesting support beyond what software does
 
 ---
 

@@ -1,0 +1,95 @@
+# CI: ISA tests in lockstep with Spike, the SoC testbenches, and lint.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  SPIKE_REV: fb225a5f5e50d889305b8ef6e53c2b66d9e765f7          # riscv-isa-sim, the revision the results were taken with
+  RISCV_TESTS_REV: 3df703cd52d5f0d8224e3c50bf03c6cb70efff98    # riscv-tests
+
+jobs:
+  isa:
+    name: ISA tests (riscv-tests + directed) in lockstep with Spike
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain and simulator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-unknown-elf iverilog device-tree-compiler
+
+      - name: Restore Spike
+        id: spike-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/spike
+          key: spike-${{ env.SPIKE_REV }}-ubuntu-24.04
+
+      - name: Build Spike
+        if: steps.spike-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/riscv-software-src/riscv-isa-sim.git /tmp/spike-src
+          cd /tmp/spike-src
+          git checkout "$SPIKE_REV"
+          git submodule update --init --depth 1
+          mkdir build && cd build
+          ../configure --prefix="$HOME/spike" --with-boost=no
+          make -j"$(nproc)"
+          make install
+
+      - name: Run ISA tests
+        run: SPIKE="$HOME/spike/bin/spike" tests/isa/run_isa.sh
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: isa-results
+          path: |
+            tests/isa/build/results.txt
+            tests/isa/build/*.trace
+            tests/isa/build/*.spike
+
+  soc-testbenches:
+    name: SoC testbenches (Verilog and cocotb)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install simulators
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iverilog
+          pip install cocotb==2.0.1
+
+      - name: Verilog testbench
+        run: |
+          mkdir -p build && cd build
+          cp ../firmware/firmware.hex .
+          iverilog -g2005 -o sim -I ../rtl/pkg -I ../rtl/core \
+            ../rtl/core/*.v ../rtl/cache/*.v ../rtl/bus/*.v ../rtl/periph/*.v \
+            ../rtl/brv32p_soc.v ../tb/tb_brv32p_soc.v
+          vvp -n sim | tee tb.log
+          grep -q 'ALL TESTS PASSED' tb.log
+
+      - name: cocotb
+        run: |
+          cd cocotb
+          cp ../firmware/firmware.hex .
+          make
+          ! grep -q '<failure' results.xml
+
+  lint:
+    name: Verilator lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Verilator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator
+      - name: Lint
+        run: scripts/lint.sh

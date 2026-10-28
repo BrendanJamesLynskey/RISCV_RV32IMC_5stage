@@ -28,6 +28,7 @@ module hazard_unit (
   // Control hazards
   input  wire        branch_mispredict,
   input  wire        jump_ex,        // JAL/JALR resolved in EX
+  input  wire        trap,           // Trap taken by the instruction in MEM
 
   // MulDiv stall
   input  wire        muldiv_busy,
@@ -101,6 +102,10 @@ module hazard_unit (
       stall_if  = 1'b0;
       stall_id  = 1'b0;
     end
+    // Trap in MEM: the younger instruction in EX must not reach MEM either,
+    // so the trap is precise
+    if (trap)
+      flush_mem = 1'b1;
   end
 
 endmodule

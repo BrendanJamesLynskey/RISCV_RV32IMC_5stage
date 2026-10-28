@@ -474,6 +474,7 @@ module brv32p_core (
     .wb_reg_wr        (ctrl_wb[`CTRL_REG_WR]),
     .branch_mispredict(branch_mispredict_ex || trap_enter || mret_ex),
     .jump_ex          (ctrl_ex[`CTRL_JAL] || ctrl_ex[`CTRL_JALR]),
+    .trap             (trap_enter),
     .muldiv_busy      (muldiv_busy),
     .fwd_rs1          (fwd_rs1),
     .fwd_rs2          (fwd_rs2),

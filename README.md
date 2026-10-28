@@ -215,6 +215,11 @@ while hiding failures. Once every check counted, these bugs showed up. Each fix 
 | Firmware data address | Stores overwrote the program | Data at `0x1000_0000` aliases SRAM address 0 | Memory-map review |
 | Hollow tests | Failures reported as INFO or passed on reset values | See the testbench and cocotb commits | Review |
 
+## How this was built
+
+This core was first written quickly with AI assistance (Feb–Mar 2026). In October 2026 I reviewed it line by line
+and rebuilt its verification. That review found the bugs listed above, each fixed in its own commit.
+
 ## Design Notes
 
 ### Hazard handling

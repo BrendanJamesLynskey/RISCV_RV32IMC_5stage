@@ -359,9 +359,13 @@ module brv32p_core (
   // when the pipeline advances. During a memory stall the EX and MEM
   // instructions are held, so acting early would flush the branch or jump
   // itself while its redirect is lost (the PC does not load while stalled).
-  assign branch_mispredict_ex = !mem_stall && is_branch_or_jump &&
-    ((actual_taken != pred_taken_ex) ||
-     (actual_taken && (branch_target_computed != pc_ex + pc_inc_ex)));
+  // A taken prediction for an instruction that is not a branch or jump (a
+  // BTB alias, or a stale entry) is also a mispredict: fall through to pc+len.
+  assign branch_mispredict_ex = !mem_stall && valid_ex &&
+    ((is_branch_or_jump &&
+      ((actual_taken != pred_taken_ex) ||
+       (actual_taken && (branch_target_computed != pc_ex + pc_inc_ex)))) ||
+     (!is_branch_or_jump && pred_taken_ex));
 
   assign branch_target_ex = actual_taken ? branch_target_computed :
                             (pc_ex + pc_inc_ex);

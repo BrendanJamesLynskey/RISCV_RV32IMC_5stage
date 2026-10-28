@@ -322,6 +322,7 @@ module brv32p_core (
       WB_ALU:    ex_result = alu_result_ex;
       WB_PC4:    ex_result = pc_ex + pc_inc_ex;
       WB_MULDIV: ex_result = muldiv_result;
+      WB_AUIPC:  ex_result = auipc_result;
       default:   ex_result = alu_result_ex;
     endcase
   end

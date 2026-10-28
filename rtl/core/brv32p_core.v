@@ -24,7 +24,20 @@ module brv32p_core (
 
   // Interrupts
   input  wire        ext_irq,
-  input  wire        timer_irq
+  input  wire        timer_irq,
+
+  // Retire trace: one pulse per retired instruction, in program order.
+  // Not used by the SoC; testbenches compare it against a reference model.
+  output wire        retire_valid,
+  output wire [31:0] retire_pc,
+  output wire [31:0] retire_insn,      // raw encoding; [31:16] = 0 for RVC
+  output wire        retire_rd_we,
+  output wire [4:0]  retire_rd_addr,
+  output wire [31:0] retire_rd_wdata,
+  output wire        retire_mem_we,
+  output wire [31:0] retire_mem_addr,
+  output wire [31:0] retire_mem_wdata,
+  output wire [1:0]  retire_mem_width
 );
 
   `include "brv32p_defs.vh"
@@ -125,6 +138,8 @@ module brv32p_core (
   reg [31:0] pc_inc_id;
   reg        pred_taken_id;
   reg        illegal_c_id;
+  reg        valid_id;                  // stage holds a real instruction, not a bubble
+  reg [31:0] raw_id;                    // original encoding, for the retire trace
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n || flush_id) begin
@@ -133,12 +148,16 @@ module brv32p_core (
       pc_inc_id     <= 32'd4;
       pred_taken_id <= 1'b0;
       illegal_c_id  <= 1'b0;
+      valid_id      <= 1'b0;
+      raw_id        <= 32'b0;
     end else if (!stall_id && !mem_stall) begin
       pc_id         <= pc_if;
       instr_id      <= instr_expanded_if;
       pc_inc_id     <= pc_inc;
       pred_taken_id <= bp_pred_taken && bp_pred_valid;
       illegal_c_id  <= illegal_c_if;
+      valid_id      <= 1'b1;
+      raw_id        <= is_compressed_if ? {16'b0, instr_raw_if[15:0]} : instr_raw_if;
     end
   end
 
@@ -184,9 +203,13 @@ module brv32p_core (
   reg [4:0]          rs1_addr_ex, rs2_addr_ex, rd_addr_ex;
   reg [`CTRL_W-1:0]  ctrl_ex;
   reg                pred_taken_ex;
+  reg                valid_ex;
+  reg [31:0]         raw_ex;
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n || flush_ex) begin
+      valid_ex      <= 1'b0;
+      raw_ex        <= 32'b0;
       ctrl_ex       <= {`CTRL_W{1'b0}};
       pc_ex         <= 32'b0;
       rs1_data_ex   <= 32'b0;
@@ -208,6 +231,8 @@ module brv32p_core (
       rs2_addr_ex   <= rs2_addr_id;
       rd_addr_ex    <= rd_addr_id;
       pred_taken_ex <= pred_taken_id;
+      valid_ex      <= valid_id;
+      raw_ex        <= raw_id;
     end
   end
 
@@ -337,6 +362,9 @@ module brv32p_core (
 
   assign alu_result_mem = ex_result_mem;  // Forwarding tap
 
+  reg                valid_mem;
+  reg [31:0]         raw_mem;
+
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n || flush_mem) begin
       ctrl_mem       <= {`CTRL_W{1'b0}};
@@ -344,12 +372,18 @@ module brv32p_core (
       ex_result_mem  <= 32'b0;
       rs2_data_mem   <= 32'b0;
       rd_addr_mem    <= 5'b0;
+      valid_mem      <= 1'b0;
+      raw_mem        <= 32'b0;
     end else if (!mem_stall) begin
       ctrl_mem       <= ctrl_ex;
       pc_mem         <= pc_ex;
       ex_result_mem  <= ex_result;
       rs2_data_mem   <= rs2_fwd;
       rd_addr_mem    <= rd_addr_ex;
+      // While EX is stalled (multi-cycle MUL/DIV) this register keeps copying
+      // the waiting instruction; only the final copy is a real instruction.
+      valid_mem      <= valid_ex && !stall_ex;
+      raw_mem        <= raw_ex;
     end
   end
 
@@ -371,9 +405,17 @@ module brv32p_core (
   wire        irq_pending;
   wire [31:0] csr_rdata;
 
-  assign trap_enter = !mem_stall &&
-                      (ctrl_mem[`CTRL_ECALL] || ctrl_mem[`CTRL_EBREAK] ||
-                       ctrl_mem[`CTRL_ILLEGAL] || irq_pending);
+  // Exceptions belong to the instruction in MEM, which does not retire.
+  // Interrupts are taken at the instruction in EX (mepc = pc_ex): it and all
+  // younger instructions are flushed, and the instruction in MEM completes
+  // normally, so nothing runs twice after MRET. An interrupt waits while EX
+  // is a bubble, a MUL/DIV is busy, or MEM holds a CSR instruction (whose
+  // write the trap would otherwise override).
+  wire exc_mem  = valid_mem && (ctrl_mem[`CTRL_ECALL] || ctrl_mem[`CTRL_EBREAK] ||
+                                ctrl_mem[`CTRL_ILLEGAL]);
+  wire irq_take = irq_pending && valid_ex && !stall_ex && !ctrl_mem[`CTRL_CSR_EN] && !exc_mem;
+
+  assign trap_enter = !mem_stall && (exc_mem || irq_take);
 
   reg [31:0] trap_cause, trap_val;
   always @(*) begin
@@ -385,7 +427,7 @@ module brv32p_core (
       trap_cause = 32'd11;
     end else if (ctrl_mem[`CTRL_EBREAK]) begin
       trap_cause = 32'd3;
-    end else if (irq_pending) begin
+    end else if (irq_take) begin
       trap_cause = {1'b1, 31'd11};
     end
   end
@@ -397,6 +439,8 @@ module brv32p_core (
   reg [31:0]         csr_rdata_wb;
   reg [4:0]          rd_addr_wb;
   reg [`CTRL_W-1:0]  ctrl_wb;
+  reg                valid_wb;          // high for exactly one cycle per retired instruction
+  reg [31:0]         pc_wb, raw_wb, mem_addr_wb, mem_wdata_wb;
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -404,11 +448,23 @@ module brv32p_core (
       mem_result_wb <= 32'b0;
       csr_rdata_wb <= 32'b0;
       rd_addr_wb   <= 5'b0;
+      valid_wb     <= 1'b0;
+      pc_wb        <= 32'b0;
+      raw_wb       <= 32'b0;
+      mem_addr_wb  <= 32'b0;
+      mem_wdata_wb <= 32'b0;
     end else if (!mem_stall) begin
       ctrl_wb      <= ctrl_mem;
       mem_result_wb <= mem_result;
       csr_rdata_wb <= csr_rdata;
       rd_addr_wb   <= rd_addr_mem;
+      valid_wb     <= valid_mem && !exc_mem;   // a trapping instruction does not retire
+      pc_wb        <= pc_mem;
+      raw_wb       <= raw_mem;
+      mem_addr_wb  <= ex_result_mem;
+      mem_wdata_wb <= rs2_data_mem;
+    end else begin
+      valid_wb     <= 1'b0;                    // held by a stall: already retired
     end
   end
 
@@ -423,9 +479,21 @@ module brv32p_core (
     endcase
   end
 
-  assign wb_wr_en   = ctrl_wb[`CTRL_REG_WR];
+  assign wb_wr_en   = ctrl_wb[`CTRL_REG_WR] && valid_wb;
   assign wb_rd_addr = rd_addr_wb;
   assign wb_data_fwd = wb_rd_data;  // Forwarding tap
+
+  // Retire trace
+  assign retire_valid     = valid_wb;
+  assign retire_pc        = pc_wb;
+  assign retire_insn      = raw_wb;
+  assign retire_rd_we     = wb_wr_en && (rd_addr_wb != 5'd0);
+  assign retire_rd_addr   = rd_addr_wb;
+  assign retire_rd_wdata  = wb_rd_data;
+  assign retire_mem_we    = valid_wb && ctrl_wb[`CTRL_MEM_WR];
+  assign retire_mem_addr  = mem_addr_wb;
+  assign retire_mem_wdata = mem_wdata_wb;
+  assign retire_mem_width = ctrl_wb[`CTRL_MEM_WIDTH];
 
   // ════════════════════════════════════════════════════════════════════
   // CSR Unit
@@ -438,7 +506,7 @@ module brv32p_core (
   csr u_csr (
     .clk           (clk),
     .rst_n         (rst_n),
-    .csr_en        (ctrl_mem[`CTRL_CSR_EN] && !trap_enter && !mem_stall),  // write once; read value is the old one
+    .csr_en        (valid_mem && ctrl_mem[`CTRL_CSR_EN] && !trap_enter && !mem_stall),  // write once; read value is the old one
     .csr_addr      (ctrl_mem[`CTRL_CSR_ADDR]),
     .csr_op        (ctrl_mem[`CTRL_CSR_OP]),
     .csr_wdata     (csr_wdata),
@@ -446,13 +514,13 @@ module brv32p_core (
     .trap_enter    (trap_enter),
     .trap_cause    (trap_cause),
     .trap_val      (trap_val),
-    .trap_pc       (pc_mem),
+    .trap_pc       (exc_mem ? pc_mem : pc_ex),
     .mtvec_out     (mtvec_out),
     .mepc_out      (mepc_out),
     .mret          (mret_ex),
     .ext_irq       (ext_irq),
     .timer_irq     (timer_irq),
-    .instr_retired (ctrl_wb[`CTRL_REG_WR] || ctrl_wb[`CTRL_MEM_WR] || ctrl_wb[`CTRL_ECALL]),
+    .instr_retired (valid_wb),
     .irq_pending   (irq_pending)
   );
 

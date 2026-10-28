@@ -82,7 +82,7 @@ program = [
     slt(x19, x2, x1),          # 0x28: x19 = 1 (10 < 42)
 
     # ── Load/Store Tests ─────────────────────────────────────────
-    lui(x10, 0x10000000),       # 0x2C: x10 = 0x10000000 (DMEM base)
+    lui(x10, 0x00004000),       # 0x2C: x10 = 0x00004000 (data, 16 KB into the SRAM, clear of the code)
     sw(x3, 0, x10),             # 0x30: DMEM[0] = 52
     lw(x11, 0, x10),            # 0x34: x11 = 52
     sb(x6, 4, x10),             # 0x38: DMEM[4] = 0x55
@@ -106,9 +106,7 @@ program = [
     jal(x16, 8),                # 0x68: Jump to 0x70, x16 = 0x6C
     addi(x17, x0, 0xDE),        # 0x6C: DEAD CODE
     addi(x17, x0, 3),           # 0x70: x17 = 3 (JAL target)
-    jalr(x20, x16, 0),          # 0x74: Jump to x16 (0x6C), x20 = 0x78
-    # Falls through to the dead code at 0x6C which will execute addi x17, x0, 0xDE
-    # Then continues. Let's adjust: JALR to a forward address instead.
+    jalr(x20, x16, 12),         # 0x74: Jump to x16 + 12 = 0x78, x20 = 0x78
 
     # ── UART Setup ───────────────────────────────────────────────
     lui(x20, 0x20000000),       # 0x78: x20 = 0x20000000
@@ -137,11 +135,6 @@ program = [
     nop(),                      # 0xB0: NOP
     jal(x0, -4),                # 0xB4: Spin forever → 0xB0
 ]
-
-# Fix the JALR: make it jump forward to UART setup instead
-# Patch instruction at index 18 (0x74): jalr x20, x16, 0
-# x16 will hold 0x6C from the JAL. jalr x20, x16, 12 → 0x6C + 12 = 0x78
-program[18] = jalr(x20, x16, 12)  # Jump to 0x78
 
 import os
 outpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "firmware.hex")

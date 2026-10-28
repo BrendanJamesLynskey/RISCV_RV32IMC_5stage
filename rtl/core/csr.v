@@ -70,8 +70,16 @@ module csr (
     endcase
   end
 
-  // Hoisted local variable
+  // New value for a CSR write: CSRRW writes, CSRRS sets bits, CSRRC clears them
   reg [31:0] nv;
+  always @(*) begin
+    case (csr_op[1:0])
+      2'b01:   nv = csr_wdata;
+      2'b10:   nv = csr_rdata | csr_wdata;
+      2'b11:   nv = csr_rdata & ~csr_wdata;
+      default: nv = csr_rdata;
+    endcase
+  end
 
   // CSR Write / Trap
   always @(posedge clk or negedge rst_n) begin
@@ -100,12 +108,6 @@ module csr (
         mstatus[3] <= mstatus[7];
         mstatus[7] <= 1'b1;
       end else if (csr_en) begin
-        case (csr_op[1:0])
-          2'b01: nv = csr_wdata;
-          2'b10: nv = csr_rdata | csr_wdata;
-          2'b11: nv = csr_rdata & ~csr_wdata;
-          default: nv = csr_rdata;
-        endcase
         case (csr_addr)
           CSR_MSTATUS:  mstatus  <= nv & 32'h88;
           CSR_MIE:      mie      <= nv;

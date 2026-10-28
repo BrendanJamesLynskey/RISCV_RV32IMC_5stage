@@ -50,9 +50,11 @@ module muldiv (
 
   assign div_done = div_active && (div_count == 6'd32);
 
-  // Hoisted local variables
-  reg [31:0] abs_a, abs_b;
-  reg [32:0] rem_sh, trial;
+  // Operand magnitudes, and one restoring step on the current accumulator
+  wire [31:0] abs_a  = a[31] ? (~a + 1'b1) : a;
+  wire [31:0] abs_b  = b[31] ? (~b + 1'b1) : b;
+  wire [32:0] rem_sh = {div_acc[63:32], div_acc[31]};   // remainder shifted, next dividend bit in
+  wire [32:0] trial  = rem_sh - {1'b0, divisor_reg};
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -77,8 +79,6 @@ module muldiv (
 
       // Handle signs for signed division
       if ((op == MD_DIV) || (op == MD_REM)) begin
-        abs_a = a[31] ? (~a + 1) : a;
-        abs_b = b[31] ? (~b + 1) : b;
         div_acc     <= {32'd0, abs_a};
         divisor_reg <= abs_b;
         negate_result    <= a[31] ^ b[31];
@@ -94,8 +94,6 @@ module muldiv (
         // Restoring division step. div_acc = {remainder, dividend/quotient}:
         // shift the next dividend bit into the remainder, then try to
         // subtract the divisor (33 bits, so a remainder >= 2^31 is safe)
-        rem_sh = {div_acc[63:32], div_acc[31]};
-        trial  = rem_sh - {1'b0, divisor_reg};
         if (!trial[32])
           div_acc <= {trial[31:0], div_acc[30:0], 1'b1};
         else

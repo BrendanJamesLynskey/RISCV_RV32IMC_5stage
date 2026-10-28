@@ -67,17 +67,43 @@ module brv32p_core (
   wire        bp_pred_valid;
   wire        is_compressed_if;
 
+  // Instruction alignment (RV32C). Memory returns aligned 32-bit words, but
+  // instructions are 16 or 32 bits on any 16-bit boundary:
+  //   pc[1] = 0: the instruction starts in the low half of the word;
+  //   pc[1] = 1: it starts in the high half. If that half is a compressed
+  //              instruction, use it; otherwise the instruction straddles
+  //              two words. Keep the half in half_buf, fetch the next word
+  //              (sending a bubble to ID meanwhile), then join the halves.
+  reg         straddle;          // half_buf holds the low half of the instruction at pc_if
+  reg  [15:0] half_buf;
+  wire        fetch_valid;       // instr_raw_if is a complete instruction this cycle
+  wire [15:0] half_at_pc = pc_if[1] ? imem_rdata[31:16] : imem_rdata[15:0];
+  wire        straddle_start = !straddle && pc_if[1] && (half_at_pc[1:0] == 2'b11);
+  wire        if_advance = !stall_if && !mem_stall;
+  wire        redirect;          // mispredict, trap or MRET this cycle
+
+  assign fetch_valid  = !straddle_start;
+  assign instr_raw_if = straddle                   ? {imem_rdata[15:0], half_buf} :
+                        (half_at_pc[1:0] != 2'b11) ? {16'b0, half_at_pc}         :
+                                                     imem_rdata;
+  assign imem_addr    = {pc_if[31:2] + {29'b0, straddle}, 2'b00};
+  assign imem_rd      = 1'b1;
+
   // PC Register
   always @(posedge clk or negedge rst_n) begin
-    if (!rst_n)
-      pc_if <= RESET_VECTOR;
-    else if (!stall_if && !mem_stall)
-      pc_if <= pc_next;
+    if (!rst_n) begin
+      pc_if    <= RESET_VECTOR;
+      straddle <= 1'b0;
+      half_buf <= 16'b0;
+    end else if (redirect && !mem_stall) begin
+      pc_if    <= pc_next;
+      straddle <= 1'b0;
+    end else if (if_advance) begin
+      pc_if    <= pc_next;           // holds pc_if while a straddle is pending
+      straddle <= straddle_start;
+      if (straddle_start) half_buf <= half_at_pc;
+    end
   end
-
-  assign imem_addr = pc_if;
-  assign imem_rd   = 1'b1;
-  assign instr_raw_if = imem_rdata;
 
   // Compressed decoder
   wire [31:0] instr_expanded_if;
@@ -118,6 +144,8 @@ module brv32p_core (
   wire [31:0] pc_inc;
   assign pc_inc = is_compressed_if ? 32'd2 : 32'd4;
 
+  assign redirect = trap_enter || mret_ex || branch_mispredict_ex;
+
   always @(*) begin
     if (trap_enter)
       pc_next = mtvec_out;
@@ -125,6 +153,8 @@ module brv32p_core (
       pc_next = mepc_out;
     else if (branch_mispredict_ex)
       pc_next = branch_target_ex;
+    else if (!fetch_valid)
+      pc_next = pc_if;               // first half of a straddling instruction
     else if (bp_pred_taken && bp_pred_valid)
       pc_next = bp_pred_target;
     else
@@ -152,12 +182,12 @@ module brv32p_core (
       raw_id        <= 32'b0;
     end else if (!stall_id && !mem_stall) begin
       pc_id         <= pc_if;
-      instr_id      <= instr_expanded_if;
+      instr_id      <= fetch_valid ? instr_expanded_if : 32'h0000_0013;  // NOP while a straddle completes
       pc_inc_id     <= pc_inc;
-      pred_taken_id <= bp_pred_taken && bp_pred_valid;
-      illegal_c_id  <= illegal_c_if;
-      valid_id      <= 1'b1;
-      raw_id        <= is_compressed_if ? {16'b0, instr_raw_if[15:0]} : instr_raw_if;
+      pred_taken_id <= bp_pred_taken && bp_pred_valid && fetch_valid;
+      illegal_c_id  <= illegal_c_if && fetch_valid;
+      valid_id      <= fetch_valid;
+      raw_id        <= instr_raw_if;
     end
   end
 

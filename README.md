@@ -12,7 +12,7 @@ A synthesisable RV32IMC RISC-V SoC implemented in Verilog-2001. Features a class
 | **Pipeline** | 5-stage (IF / ID / EX / MEM / WB), in-order |
 | **Hazards** | Full data forwarding; load-use stall; flush on misprediction |
 | **Branch prediction** | 2-bit saturating BHT + Branch Target Buffer (BTB) |
-| **I-cache** | 2-way set-associative, 2 KB, write-allocate |
+| **I-cache** | 2-way set-associative, 2 KB, 16-byte lines, read-only (filled on a miss) |
 | **D-cache** | 2-way set-associative, 2 KB, write-through |
 | **Bus** | AXI4-Lite, 2-master / 2-slave interconnect with priority arbiter |
 | **Memory** | 32 KB unified backing SRAM |
@@ -282,7 +282,7 @@ that turns out not to be a branch, flushes the two younger instructions (2-cycle
 
 ### Cache coherence
 
-The D-cache uses a **write-through, no-write-allocate** policy, so memory is always up to date. FENCE.I invalidates
+The D-cache uses a **write-through, write-allocate** policy (a store miss fills the line, then writes it), so memory is always up to date. FENCE.I invalidates
 the I-cache and refetches the next instruction, which makes code written by stores visible.
 
 ### AXI4-Lite interconnect

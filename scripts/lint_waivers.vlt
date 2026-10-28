@@ -1,0 +1,21 @@
+`verilator_config
+// Lint waivers for scripts/lint.sh. Everything else in -Wall is enforced.
+
+// brv32p_defs.vh is included by every module, and each uses only some of
+// its parameters. (A -file match does not apply inside an `include, and
+// the header holds all of the design's localparams, so the rule is waived
+// globally.)
+lint_off -rule UNUSEDPARAM
+
+// The core's retire_* outputs are a trace for testbenches; the SoC leaves
+// them unconnected (synthesis removes the logic behind them)
+lint_off -rule PINMISSING -file "*brv32p_soc.v"
+
+// The caches drive the interconnect without its ready/valid handshakes
+// (single-beat, always-ready model), so those ports are left empty
+lint_off -rule PINCONNECTEMPTY -file "*brv32p_soc.v"
+
+// Unused bits by design: partial address decoding (peripherals and SRAM look
+// at a few address bits), pc[0] (always 0), and instruction fields that a
+// given unit does not need
+lint_off -rule UNUSEDSIGNAL

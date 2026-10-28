@@ -13,6 +13,7 @@ module icache #(
   // CPU interface
   input  wire [31:0] addr,
   input  wire        rd_en,
+  input  wire        invalidate,   // FENCE.I: drop every line (taken when idle)
   output reg  [31:0] rdata,
   output reg         ready,
 
@@ -107,7 +108,11 @@ module icache #(
     end else begin
       case (state)
         S_IDLE: begin
-          if (rd_en && hit) begin
+          if (invalidate) begin
+            for (s = 0; s < SETS; s = s + 1)
+              for (w = 0; w < WAYS; w = w + 1)
+                valid_mem[s][w] <= 1'b0;
+          end else if (rd_en && hit) begin
             lru[set] <= hit_way0 ? 1'b1 : 1'b0;
           end else if (rd_en && !hit) begin
             fill_way       <= lru[set] ? 1'b1 : 1'b0;

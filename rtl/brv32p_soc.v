@@ -4,7 +4,8 @@
 
 module brv32p_soc #(
   parameter MEM_DEPTH  = 8192,
-  parameter INIT_FILE  = "firmware.hex"
+  parameter INIT_FILE  = "firmware.hex",
+  parameter [31:0] RESET_PC = 32'h0000_0000   // every non-peripheral address aliases the SRAM
 )(
   input  wire        clk,
   input  wire        rst_n,
@@ -54,11 +55,14 @@ module brv32p_soc #(
   wire [31:0] uart_wdata_b, uart_rdata_b;
   wire [31:0] timer_wdata_b, timer_rdata_b;
   wire        gpio_irq, uart_irq, timer_irq;
+  wire        icache_invalidate;
 
   // ══════════════════════════════════════════════════════════════════════
   // CPU Core
   // ══════════════════════════════════════════════════════════════════════
-  brv32p_core u_core (
+  brv32p_core #(
+    .RESET_PC (RESET_PC)
+  ) u_core (
     .clk           (clk),
     .rst_n         (rst_n),
     .imem_addr     (core_imem_addr),
@@ -74,7 +78,8 @@ module brv32p_soc #(
     .dmem_rdata    (core_dmem_rdata),
     .dmem_ready    (core_dmem_ready),
     .ext_irq       (gpio_irq | uart_irq),
-    .timer_irq     (timer_irq)
+    .timer_irq     (timer_irq),
+    .icache_invalidate (icache_invalidate)
   );
 
   // ══════════════════════════════════════════════════════════════════════
@@ -85,6 +90,7 @@ module brv32p_soc #(
     .rst_n     (rst_n),
     .addr      (core_imem_addr),
     .rd_en     (core_imem_rd),
+    .invalidate(icache_invalidate),
     .rdata     (core_imem_rdata),
     .ready     (core_imem_ready),
     .mem_addr  (ic_mem_addr),

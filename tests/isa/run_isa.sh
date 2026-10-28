@@ -22,15 +22,20 @@ if [ ! -d "$RISCV_TESTS/isa" ]; then
   git -C "$RISCV_TESTS" checkout -q "$RISCV_TESTS_REV"
 fi
 
-# Suites and the -march each is assembled for. rv32uc needs C; rv32ui and
-# rv32um are built without C, as upstream does, so they use 32-bit encodings.
-declare -A MARCH=( [rv32ui]=rv32i_zicsr_zifencei [rv32um]=rv32im_zicsr_zifencei [rv32uc]=rv32ic_zicsr_zifencei )
-SUITES=(rv32ui rv32um rv32uc)
+# Suites, their source directory and the -march each is assembled for.
+# rv32ui and rv32um are built without C, as upstream does (32-bit encodings).
+# rv32ui-c and rv32um-c are the same sources assembled with C enabled: the
+# assembler compresses most instructions, so 16- and 32-bit instructions mix
+# and 32-bit ones straddle word boundaries, which stresses instruction fetch.
+declare -A MARCH=( [rv32ui]=rv32i_zicsr_zifencei [rv32um]=rv32im_zicsr_zifencei [rv32uc]=rv32ic_zicsr_zifencei
+                   [rv32ui-c]=rv32ic_zicsr_zifencei [rv32um-c]=rv32imc_zicsr_zifencei )
+declare -A SRC=( [rv32ui]=rv32ui [rv32um]=rv32um [rv32uc]=rv32uc [rv32ui-c]=rv32ui [rv32um-c]=rv32um )
+SUITES=(rv32ui rv32um rv32uc rv32ui-c rv32um-c)
 
 tests=("$@")
 if [ ${#tests[@]} -eq 0 ]; then
   for s in "${SUITES[@]}"; do
-    for f in "$RISCV_TESTS/isa/$s"/*.S; do tests+=("$s/$(basename "$f" .S)"); done
+    for f in "$RISCV_TESTS/isa/${SRC[$s]}"/*.S; do tests+=("$s/$(basename "$f" .S)"); done
   done
 fi
 
@@ -46,7 +51,7 @@ for t in "${tests[@]}"; do
   suite="${t%%/*}"; name="${t##*/}"; out="$B/$suite-$name"
   "${CROSS}gcc" -march="${MARCH[$suite]}" -mabi=ilp32 -static -mcmodel=medany -nostdlib -nostartfiles \
     -I "$HERE/env" -I "$RISCV_TESTS/isa/macros/scalar" -T "$HERE/env/link.ld" \
-    "$RISCV_TESTS/isa/$suite/$name.S" -o "$out.elf"
+    "$RISCV_TESTS/isa/${SRC[$suite]}/$name.S" -o "$out.elf"
   "${CROSS}objcopy" -O binary "$out.elf" "$out.bin"
   python3 "$HERE/elf2hex.py" "$out.bin" "$out.hex"
   "${CROSS}objdump" -d "$out.elf" > "$out.dis"

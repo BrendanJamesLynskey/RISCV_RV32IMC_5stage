@@ -188,7 +188,9 @@ module tb_brv32p_soc;
     // x23 resets to 0, so the loop result only counts once the end is reached
     check("Loop finished: x23=0 at program end",
           (get_reg(20) === 32'h0000_00A4) ? get_reg(23) : 32'hFFFF_FFFF, 32'd0);
-    check_nonzero("CSRRS read mcycle into x21", get_reg(21));
+    run(5);   // let the CSRRS after the AUIPC reach writeback
+    // x21 held 8 (the UART divider) before the CSRRS, so require a real cycle count
+    check("CSRRS read mcycle into x21 (> 100 cycles)", (get_reg(21) > 32'd100), 32'd1);
     run(50);
     check("ECALL trapped: mcause=11", `CSR.mcause, 32'd11);
 

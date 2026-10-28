@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Convert a flat binary (objcopy -O binary, linked at address 0) into the
+"""Convert a flat binary (objcopy -O binary; it starts at the lowest load
+address, which the SRAM sees as address 0 through aliasing) into the
 one-32-bit-word-per-line hex file that axi_sram's $readmemh expects."""
 import sys
 

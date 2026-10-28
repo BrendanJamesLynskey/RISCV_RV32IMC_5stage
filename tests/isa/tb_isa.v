@@ -23,7 +23,8 @@ module tb_isa;
 
   brv32p_soc #(
     .MEM_DEPTH (8192),
-    .INIT_FILE ("")
+    .INIT_FILE (""),
+    .RESET_PC  (32'h8000_0000)      // tests are linked at 0x8000_0000, like Spike's RAM
   ) dut (
     .clk      (clk),
     .rst_n    (rst_n),
@@ -35,9 +36,9 @@ module tb_isa;
 
   `define CORE dut.u_core
 
-  reg [1023:0] hex_file, trace_file;
+  reg [8*512-1:0] hex_file, trace_file;   // paths up to 512 characters
   reg [31:0]   tohost;
-  integer      timeout, cycles, retired, trace_fd;
+  integer      timeout, cycles, retired, trace_fd, hex_fd;
 
   initial begin
     if (!$value$plusargs("hex=%s", hex_file)) begin
@@ -52,20 +53,31 @@ module tb_isa;
     trace_fd = 0;
     if ($value$plusargs("trace=%s", trace_file)) trace_fd = $fopen(trace_file, "w");
 
+    // $readmemh only warns if the file is missing, which would leave the
+    // memory full of NOPs; fail loudly instead
+    hex_fd = $fopen(hex_file, "r");
+    if (hex_fd == 0) begin
+      $display("RESULT FAIL 0 cycles 0 retired (cannot open %0s)", hex_file);
+      $finish;
+    end
+    $fclose(hex_fd);
+
     // Load after the SRAM's own initial block has filled memory with NOPs
     #1 $readmemh(hex_file, dut.u_sram.mem);
   end
 
   // Commit log: one line per retired instruction, in Spike's --log-commits
   // style: core 0, privilege 3 (M), pc, encoding, then the register write
-  // and/or the store.
-  always @(posedge clk) if (rst_n && `CORE.retire_valid && trace_fd != 0) begin
+  // and/or the store. Called from the checking block below, so the final
+  // tohost store is logged before the run ends.
+  task log_retire;
+  begin
     if (`CORE.retire_insn[31:16] == 16'b0 && `CORE.retire_insn[1:0] != 2'b11)
       $fwrite(trace_fd, "core   0: 3 0x%08h (0x%04h)", `CORE.retire_pc, `CORE.retire_insn[15:0]);
     else
       $fwrite(trace_fd, "core   0: 3 0x%08h (0x%08h)", `CORE.retire_pc, `CORE.retire_insn);
     if (`CORE.retire_rd_we)
-      $fwrite(trace_fd, " x%0d%s 0x%08h", `CORE.retire_rd_addr,
+      $fwrite(trace_fd, " x%0d%s0x%08h", `CORE.retire_rd_addr,
               (`CORE.retire_rd_addr < 10) ? "  " : " ", `CORE.retire_rd_wdata);
     if (`CORE.retire_mem_we)
       case (`CORE.retire_mem_width)
@@ -75,6 +87,7 @@ module tb_isa;
       endcase
     $fwrite(trace_fd, "\n");
   end
+  endtask
 
   initial begin
     rst_n   = 0;
@@ -88,6 +101,7 @@ module tb_isa;
     cycles = cycles + 1;
     if (`CORE.retire_valid) begin
       retired = retired + 1;
+      if (trace_fd != 0) log_retire;
       if (`CORE.retire_mem_we && `CORE.retire_mem_addr == tohost) begin
         if (`CORE.retire_mem_wdata == 32'd1)
           $display("RESULT PASS %0d cycles %0d retired", cycles, retired);

@@ -99,10 +99,8 @@ module icache #(
       fill_way      <= 1'b0;
       fill_base_addr <= 32'b0;
       for (s = 0; s < SETS; s = s + 1) begin
-        for (w = 0; w < WAYS; w = w + 1) begin
+        for (w = 0; w < WAYS; w = w + 1)
           valid_mem[s][w] <= 1'b0;
-          tag_mem[s][w]   <= 0;
-        end
         lru[s] <= 1'b0;
       end
     end else begin
@@ -124,9 +122,7 @@ module icache #(
 
         S_FILL: begin
           if (mem_valid) begin
-            data_mem[set][fill_way][fill_word_cnt] <= mem_rdata;
             if (fill_word_cnt == 2'd3) begin
-              tag_mem[set][fill_way]   <= tag;
               valid_mem[set][fill_way] <= 1'b1;
               lru[set]                 <= fill_way ? 1'b0 : 1'b1;
               state                    <= S_DONE;
@@ -142,6 +138,17 @@ module icache #(
 
         default: state <= S_IDLE;
       endcase
+    end
+  end
+
+  // ── Data and tag arrays ──────────────────────────────────────────────
+  // Written outside the reset process, so FPGA tools build them as LUT RAM
+  // rather than flip-flops (the valid bits keep their reset)
+  always @(posedge clk) begin
+    if (state == S_FILL && mem_valid) begin
+      data_mem[set][fill_way][fill_word_cnt] <= mem_rdata;
+      if (fill_word_cnt == 2'd3)
+        tag_mem[set][fill_way] <= tag;
     end
   end
 

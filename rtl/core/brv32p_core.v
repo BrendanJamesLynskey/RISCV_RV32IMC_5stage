@@ -442,7 +442,12 @@ module brv32p_core (
 
   // Trap logic
   wire        irq_pending;
+  wire [4:0]  irq_code;
   wire [31:0] csr_rdata;
+
+  // Forwarding tap from MEM. A CSR instruction's result is the CSR value read
+  // here in MEM, not its EX result (rs1, the write data)
+  assign alu_result_mem = (ctrl_mem[`CTRL_WB_SEL] == WB_CSR) ? csr_rdata : ex_result_mem;
 
   // Exceptions belong to the instruction in MEM, which does not retire.
   // Interrupts are taken at the instruction in EX (mepc = pc_ex): it and all
@@ -538,9 +543,8 @@ module brv32p_core (
   // CSR Unit
   // ════════════════════════════════════════════════════════════════════
   wire [31:0] csr_wdata;
-  // ctrl_mem[CTRL_CSR_OP] is bits [19:17]; bit 2 of that = bit 19
-  assign csr_wdata = ctrl_mem[19] ?
-    {27'b0, rd_addr_mem} : ex_result_mem;
+  // CSR write data comes from EX: rs1 for CSRRW/S/C, zimm for CSRRWI/SI/CI
+  assign csr_wdata = ex_result_mem;
 
   csr u_csr (
     .clk           (clk),
@@ -560,7 +564,8 @@ module brv32p_core (
     .ext_irq       (ext_irq),
     .timer_irq     (timer_irq),
     .instr_retired (valid_wb),
-    .irq_pending   (irq_pending)
+    .irq_pending   (irq_pending),
+    .irq_code      (irq_code)
   );
 
   // ════════════════════════════════════════════════════════════════════

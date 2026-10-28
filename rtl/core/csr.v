@@ -28,7 +28,8 @@ module csr (
   input  wire        ext_irq,
   input  wire        timer_irq,
   input  wire        instr_retired,
-  output wire        irq_pending
+  output wire        irq_pending,
+  output wire [4:0]  irq_code       // cause of the pending interrupt: 11 (external) or 7 (timer)
 );
 
   `include "brv32p_defs.vh"
@@ -47,6 +48,8 @@ module csr (
     mip[7]  = timer_irq;
   end
   assign irq_pending = mstatus[3] & |(mip & mie);
+  // Priority, as the privileged spec orders them: external before timer
+  assign irq_code    = (mip[11] & mie[11]) ? 5'd11 : 5'd7;
 
   // CSR Read
   always @(*) begin
@@ -108,7 +111,7 @@ module csr (
           CSR_MIE:      mie      <= nv;
           CSR_MTVEC:    mtvec    <= {nv[31:2], 2'b00};
           CSR_MSCRATCH: mscratch <= nv;
-          CSR_MEPC:     mepc     <= {nv[31:2], 2'b00};
+          CSR_MEPC:     mepc     <= {nv[31:1], 1'b0};   // IALIGN = 16 with the C extension
           CSR_MCAUSE:   mcause   <= nv;
           CSR_MTVAL:    mtval    <= nv;
           default: ;

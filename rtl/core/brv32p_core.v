@@ -206,8 +206,11 @@ module brv32p_core (
   reg                valid_ex;
   reg [31:0]         raw_ex;
 
+  // flush_ex from a load-use hazard inserts a bubble as the load moves on to
+  // MEM; during a memory stall the load is held in EX, so it must not fire
+  // (mispredict and trap flushes are already gated by mem_stall).
   always @(posedge clk or negedge rst_n) begin
-    if (!rst_n || flush_ex) begin
+    if (!rst_n || (flush_ex && !mem_stall)) begin
       valid_ex      <= 1'b0;
       raw_ex        <= 32'b0;
       ctrl_ex       <= {`CTRL_W{1'b0}};
@@ -285,7 +288,7 @@ module brv32p_core (
     .rst_n  (rst_n),
     .start  (ctrl_ex[`CTRL_MULDIV_EN]),
     .hold   (mem_stall),
-    .kill   (flush_ex),
+    .kill   (flush_ex && !mem_stall),
     .op     (ctrl_ex[`CTRL_MULDIV_OP]),
     .a      (rs1_fwd),
     .b      (rs2_fwd),

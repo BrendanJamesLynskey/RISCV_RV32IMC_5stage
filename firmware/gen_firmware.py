@@ -34,6 +34,7 @@ def j_type(imm, rd, opcode=0x6F):
 x0, x1, x2, x3, x4, x5, x6, x7 = 0, 1, 2, 3, 4, 5, 6, 7
 x8, x9, x10, x11, x12, x13, x14, x15 = 8, 9, 10, 11, 12, 13, 14, 15
 x16, x17, x18, x19, x20, x21, x22, x23 = 16, 17, 18, 19, 20, 21, 22, 23
+x24, x25, x26 = 24, 25, 26
 
 def addi(rd, rs1, imm):  return i_type(imm, rs1, 0, rd, 0x13)
 def add(rd, rs1, rs2):   return r_type(0x00, rs2, rs1, 0, rd, 0x33)
@@ -130,10 +131,14 @@ program = [
     # ── CSR test ─────────────────────────────────────────────────
     csrrs(x21, 0xB00, x0),      # 0xA8: Read mcycle into x21
 
-    # ── Done: ECALL then spin ────────────────────────────────────
-    ecall(),                    # 0xAC: Trap
-    nop(),                      # 0xB0: NOP
-    jal(x0, -4),                # 0xB4: Spin forever → 0xB0
+    # ── Load-use: the loaded value is used by the very next instruction
+    lw(x24, 0, x10),            # 0xAC: x24 = 52 (stored at 0x30)
+    addi(x25, x24, 1),          # 0xB0: x25 = 53 only if the load-use stall works
+
+    # ── Done: ECALL; the instruction after it must not execute ───
+    ecall(),                    # 0xB4: Trap (mtvec = 0, so the program restarts)
+    addi(x26, x0, 0x77),        # 0xB8: never executes if traps are precise
+    jal(x0, -4),                # 0xBC: Spin forever → 0xB8
 ]
 
 import os

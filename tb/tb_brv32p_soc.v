@@ -46,7 +46,7 @@ module tb_brv32p_soc;
   initial begin pass_cnt = 0; fail_cnt = 0; test_num = 0; end
 
   task check;
-    input [511:0] name;
+    input [1023:0] name;
     input [31:0] actual;
     input [31:0] expected;
     begin
@@ -62,7 +62,7 @@ module tb_brv32p_soc;
   endtask
 
   task check_nonzero;
-    input [511:0] name;
+    input [1023:0] name;
     input [31:0] actual;
     begin
       test_num = test_num + 1;
@@ -192,7 +192,10 @@ module tb_brv32p_soc;
     // x21 held 8 (the UART divider) before the CSRRS, so require a real cycle count
     check("CSRRS read mcycle into x21 (> 100 cycles)", (get_reg(21) > 32'd100), 32'd1);
     run(50);
+    check("Load-use: x25 = x24 + 1 = 53", get_reg(25), 32'd53);
     check("ECALL trapped: mcause=11", `CSR.mcause, 32'd11);
+    check("ECALL is precise: the instruction after it did not run (x26 != 0x77)",
+          (get_reg(26) !== 32'h77), 32'd1);
 
     // ── GPIO ────────────────────────────────────────────────────────
     $display("\n--- Test: GPIO Output ---");

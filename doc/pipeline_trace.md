@@ -266,6 +266,16 @@ invalidate was lost and a routine patched before the fence ran its old code.
 is fetched from the I-cache as if nothing had happened. The I-cache now drops
 every line in that cycle too.
 
+## Where the cycles go
+
+`pipeview.lost_cycles` explains every cycle in which no instruction retires.
+Either the pipeline was held (a D-cache wait or an I-cache miss), or WB holds a
+bubble, which is followed back register by register to the cycle that made it:
+a flush (mispredict, trap, MRET, FENCE.I), a load-use bubble, a divide holding
+EX, or fetch delivering nothing while it assembles a 32-bit instruction that
+straddles two words. The DSP benchmarks (`tests/bench`) report their cycles
+this way.
+
 ## JSON for animation
 
 `pipeview.py json` writes the same rebuild for a window of cycles (here, the

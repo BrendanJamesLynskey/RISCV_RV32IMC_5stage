@@ -165,18 +165,18 @@ completes. The test checks that after MRET `lw t2` runs again, so nothing is
 lost or run twice.
 
 ```
-   cycle                             180       190       200      
-                                    901234567890123456789012345678
+   cycle                              190       200       210     
+                                    890123456789012345678901234567
 8000006e addi s5,s5,1               wwwwwww                       
 80000070 sw s5,0(s7)                mmmmmmmWwwwwwwwwwwwwwww       
 80000074 lw t2,0(s7)                xxxxxxx*                       (squashed: trap)
 80000078 bne t2,s5,800000a2 <fail>  ddddddd*                       (squashed: trap)
 8000007c addi s6,s6,-1              fffffff*                       (squashed: trap)
-800000d4 csrr t5,mcause                    FfffffffffffffffDXMWwww
-800000d8 lui t6,0x80000                                    FDXMmmm
-800000dc addi t6,t6,7                                       FDXxxx
+800000d4 csrr t5,mcause                    FfffffffffffffffDXMmmmm
+800000d8 lui t6,0x80000                                    FDXxxxx
+800000dc addi t6,t6,7                                       FDdddd
 800000de beq t5,t6,800000e4 <handle                          Fffff
-  events                            DDDDDDQIIIIIIIIIIIIIII....IIII
+  events                            DDDDDDQIIIIIIIIIIIIIII...IIIII
 ```
 
 ### D-cache: a store waits for memory

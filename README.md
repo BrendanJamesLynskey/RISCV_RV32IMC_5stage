@@ -227,10 +227,22 @@ caches, between marker instructions; `bench_report.py` measures the cycles betwe
 trace, and gives the cause of every cycle in which nothing retired (`pipeview.lost_cycles` follows each bubble
 back to the event that made it).
 
-| Kernel (warm caches) | What it computes | Cycles | Per unit | IPC | Main loss |
+| Kernel (warm caches) | What it computes | Cycles | Per unit | IPC | Main remaining loss |
 |---|---|---|---|---|---|
-| `fir` | 16-tap Q15 FIR, 64 outputs, 32-bit accumulator, rounded and saturated | 9,462 | 9.24 per tap | 0.85 | 32-bit instructions straddling words: 1,220 cycles |
-| `energy` | Sum of squares of 256 Q15 samples, 64-bit accumulator | 3,376 | 13.19 per sample | 0.76 | the same: 772 cycles |
+| `fir` | 16-tap Q15 FIR, 64 outputs, 32-bit accumulator, rounded and saturated | 8,308 | 8.11 per tap | 0.97 | mispredicts at inner-loop exit: 134 cycles |
+| `energy` | Sum of squares of 256 Q15 samples, 64-bit accumulator | 2,591 | 10.12 per sample | 0.99 | I-cache misses: 13 cycles |
+
+These are after the early-straddle fetch change (below). Before it, the same kernels took 9,462 and 3,376 cycles
+(9.24 per tap, 13.19 per sample), and the main loss in both was fetch: a 32-bit instruction that starts in the
+upper half of a word cost a bubble while fetch read the next word (1,220 and 772 cycles).
+
+**Early straddle.** When the next instruction in sequence starts in the upper half of the word fetch has just
+read (after a compressed instruction in the lower half, or after a straddling instruction that ended in that
+word) and is 32 bits long, fetch now keeps that half at once and reads the following word next, so no bubble is
+needed. It changes only the aligner's `straddle` and `half_buf` registers, not the next-PC path. Effect: FIR
+−12%, energy −23%; the ISA suites assembled with C −5 to −6%, the uncompressed ones unchanged. One test,
+`rv32ui-c/ld_st`, is 2% slower (4,450 to 4,537 cycles): fetch now reaches new lines sooner, and its I-cache fills
+collide more often with that test's stores on the shared AXI-Lite bus.
 
 The FIR's inner loop is 7 instructions per tap (two loads, two pointer increments, `mul`, `add`, `bne`), and the
 energy loop 9 per sample: a 64-bit sum on RV32 needs a carry chain. A multiply-accumulate into a wide

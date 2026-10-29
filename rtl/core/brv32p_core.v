@@ -79,11 +79,18 @@ module brv32p_core #(
   //              instruction, use it; otherwise the instruction straddles
   //              two words. Keep the half in half_buf, fetch the next word
   //              (sending a bubble to ID meanwhile), then join the halves.
+  // The bubble is avoided when fetch already holds that half: the next
+  // instruction in sequence starts in the upper half of the word just read
+  // (after a compressed instruction in its lower half, or after a straddling
+  // instruction that ended in it). Then the half is kept now (early_straddle)
+  // and fetch goes straight on to the following word.
   reg         straddle;          // half_buf holds the low half of the instruction at pc_if
   reg  [15:0] half_buf;
   wire        fetch_valid;       // instr_raw_if is a complete instruction this cycle
   wire [15:0] half_at_pc = pc_if[1] ? imem_rdata[31:16] : imem_rdata[15:0];
   wire        straddle_start = !straddle && pc_if[1] && (half_at_pc[1:0] == 2'b11);
+  wire        seq_upper_half;    // the next instruction in sequence starts in the upper half of this word
+  wire        early_straddle = seq_upper_half && (imem_rdata[17:16] == 2'b11);
   wire        if_advance = !stall_if && !mem_stall;
   wire        redirect;          // mispredict, trap, MRET or FENCE.I this cycle
   wire        fencei_take;       // FENCE.I in EX acts this cycle (defined in EX)
@@ -106,8 +113,9 @@ module brv32p_core #(
       straddle <= 1'b0;
     end else if (if_advance) begin
       pc_if    <= pc_next;           // holds pc_if while a straddle is pending
-      straddle <= straddle_start;
+      straddle <= straddle_start || early_straddle;
       if (straddle_start) half_buf <= half_at_pc;
+      else if (early_straddle) half_buf <= imem_rdata[31:16];
     end
   end
 
@@ -149,6 +157,14 @@ module brv32p_core #(
 
   wire [31:0] pc_inc;
   assign pc_inc = is_compressed_if ? 32'd2 : 32'd4;
+
+  // Sequential next pc lands in the upper half of the word just read: a
+  // compressed instruction in a lower half (pc[1] = 0), or a straddling
+  // instruction (pc[1] = 1, 4 bytes, ending in the word just read). Not when
+  // fetch follows a predicted-taken branch instead (pc_next mux below; a
+  // redirect resets straddle in any case).
+  assign seq_upper_half = fetch_valid && !(bp_pred_taken && bp_pred_valid) &&
+                          (pc_if[1] ? (straddle && !is_compressed_if) : is_compressed_if);
 
   assign redirect = trap_enter || mret_ex || branch_mispredict_ex || fencei_take;
 

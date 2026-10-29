@@ -368,6 +368,23 @@ module brv32p_core #(
     .valid  (muldiv_valid)
   );
 
+  // Xbrvdsp: multiply-accumulate. An accumulator instruction updates acc as
+  // it moves from EX to MEM (not while held, and not if a trap flushes it)
+  wire dsp_ex = valid_ex && (raw_ex[6:0] == OP_CUSTOM0) && !ctrl_ex[`CTRL_ILLEGAL];
+  wire [31:0] dsp_result;
+
+  dsp_unit u_dsp (
+    .clk    (clk),
+    .rst_n  (rst_n),
+    .update (dsp_ex && !mem_stall && !stall_ex && !flush_mem),
+    .funct7 (raw_ex[31:25]),
+    .funct3 (raw_ex[14:12]),
+    .a      (rs1_fwd),
+    .b      (rs2_fwd),
+    .sh     (raw_ex[24:20]),
+    .result (dsp_result)
+  );
+
   // Branch resolution
   reg  branch_taken_ex;
   wire [31:0] branch_target_computed;
@@ -444,6 +461,7 @@ module brv32p_core #(
       WB_PC4:    ex_result = pc_ex + pc_inc_ex;
       WB_MULDIV: ex_result = muldiv_result;
       WB_AUIPC:  ex_result = auipc_result;
+      WB_DSP:    ex_result = dsp_result;
       default:   ex_result = alu_result_ex;
     endcase
   end

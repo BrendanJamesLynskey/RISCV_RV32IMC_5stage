@@ -8,3 +8,4 @@ cocotb/sim_build/
 tests/bench/build/
 .Xil/
 /firmware.hex
+tools/spike_xbrvdsp/build/

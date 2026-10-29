@@ -3,8 +3,10 @@
 # them in lockstep with Spike, and report cycles per kernel.
 #
 # Usage: tests/bench/run_bench.sh
-# Needs: riscv64-unknown-elf-gcc, iverilog; Spike ($SPIKE or on the PATH) for
-#        the lockstep check (LOCKSTEP=0 skips it).
+# Needs: riscv64-unknown-elf-gcc, iverilog; Spike ($SPIKE or on the PATH) and
+#        its model of the DSP extension ($XBRVDSP_LIB, built by
+#        tools/spike_xbrvdsp/build.sh) for the lockstep check (LOCKSTEP=0
+#        skips it).
 # Writes tests/bench/build/ and prints the report (bench_report.py), which is
 # also saved as build/report.txt. Exits non-zero if a result is wrong or the
 # lockstep fails.
@@ -40,7 +42,9 @@ case "$result" in "RESULT PASS"*) ;; *) exit 1 ;; esac
 
 python3 "$ROOT/scripts/pipeview.py" check "$B/dsp.pipe" "$B/dsp.trace"
 if [ "$LOCKSTEP" = 1 ]; then
-  "$SPIKE" --isa="$MARCH" -m0x80000000:0x8000 --log-commits "$B/dsp.elf" 2> "$B/dsp.spike" || true
+  XBRVDSP_LIB="${XBRVDSP_LIB:-$ROOT/tools/spike_xbrvdsp/build/libxbrvdsp.so}"
+  "$SPIKE" --isa="$MARCH" --extlib="$XBRVDSP_LIB" --extension=xbrvdsp -m0x80000000:0x8000 \
+    --log-commits "$B/dsp.elf" 2> "$B/dsp.spike" || true
   python3 "$ROOT/tests/isa/lockstep.py" "$B/dsp.trace" "$B/dsp.spike" | tail -n 1
 fi
 

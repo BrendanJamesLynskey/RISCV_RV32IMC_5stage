@@ -44,6 +44,7 @@ localparam [6:0] OP_IMM    = 7'b0010011;
 localparam [6:0] OP_REG    = 7'b0110011;
 localparam [6:0] OP_FENCE  = 7'b0001111;
 localparam [6:0] OP_SYSTEM = 7'b1110011;
+localparam [6:0] OP_CUSTOM0 = 7'b0001011;   // Xbrvdsp (dsp_unit.v)
 
 // ── ALU Operations ───────────────────────────────────────────────────
 localparam [3:0] ALU_ADD    = 4'b0000;
@@ -75,6 +76,7 @@ localparam [2:0] WB_PC4    = 3'd2;
 localparam [2:0] WB_CSR    = 3'd3;
 localparam [2:0] WB_MULDIV = 3'd4;
 localparam [2:0] WB_AUIPC  = 3'd5;
+localparam [2:0] WB_DSP    = 3'd6;   // acc.rd / acc.rdh
 
 // ── Memory access width ──────────────────────────────────────────────
 localparam [1:0] MEM_BYTE = 2'b00;

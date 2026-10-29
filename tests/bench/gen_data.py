@@ -60,7 +60,7 @@ def main():
     print(arr("fir_x", "int16_t", x))
     print(arr("fir_h", "int16_t", h))
     print(arr("fir_expect", "int16_t", y))
-    print(arr("energy_x", "int16_t", e))
+    print(arr("energy_x", "int16_t __attribute__((aligned(4)))", e))
     print(f"static const int64_t energy_expect = {energy}LL;")
 
 

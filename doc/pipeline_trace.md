@@ -54,8 +54,8 @@ the rules put there, a bubble must be a bubble, and the instructions leaving
 WB must be exactly the retire trace, which the Spike lockstep has already
 compared with the reference model. A test fails if its trace does not check.
 
-All 101 ISA and directed tests pass this check: 125,111 cycles, 37,839
-retired, 5,775 squashed and 6 trapped instructions.
+All 102 ISA and directed tests pass this check: 125,382 cycles, 37,874
+retired, 5,790 squashed and 6 trapped instructions.
 
 The check was itself tested by putting back two of the bugs fixed earlier (see
 the README) in a scratch copy:
@@ -221,10 +221,50 @@ the whole pipeline (`mem_stall`), so the older instructions wait too:
 ```
 
 In `rv32ui/add`, 1,104 of 1,613 cycles are fetch stalls (85 misses, one per
-line: the tests are straight-line code that runs once). This is the largest
-single cost in the measured IPC, and two changes would cut it: letting the
-older instructions drain during a fetch miss (they need nothing from fetch),
-and fetching the next line ahead.
+line: the tests are straight-line code that runs once).
+
+**A fix that does not work.** Since the older instructions need nothing from
+fetch, it is tempting to let them carry on during a fetch miss, with bubbles
+going into ID. That change was built and measured: every test still passed
+(and matched Spike), but the total went down by only 1.0% (125,212 to 123,966
+cycles), and a few tests got 1% slower. The reason is visible in the diagram:
+this code is limited by fetch bandwidth, one line every 13 cycles, and
+draining the back end early does not make the next line arrive sooner. It only
+helps where the back end has its own wait (a divide, a store) to overlap.
+What would help is moving words faster (a pipelined or burst bus, or a wider
+SRAM path), and loops, which run from the cache once the first iteration has
+fetched them. The change was not kept.
+
+### A bug the trace made visible: FENCE.I during a fill
+
+Reviewing the I-cache for that change turned up a real bug. FENCE.I acts in
+EX, and when the instruction two behind it starts a line that has never been
+fetched, the fence waits in EX for the fill and acts in the cycle the filled
+word is delivered. The I-cache ignored `invalidate` in that state, so the
+invalidate was lost and a routine patched before the fence ran its old code.
+`tests/directed/fence_i_fill.S` sets this up; before the fix the core ran
+`li a0,1` where Spike ran the patched `li a0,2`:
+
+```
+   cycle                             150       160       170
+                                    901234567890123456789012345678
+80000050 nop                        wwwwwww
+80000054 nop                        mmmmmmmW
+80000058 fence.i                    xxxxxxxMW
+8000005c nop                        ddddddd*                       (squashed: fence.i)
+80000060 jal 800000a0 <patch_me>    fffffff*                       (squashed: fence.i)
+8000005c nop                               FDXMW
+80000060 jal 800000a0 <patch_me>            FDXMW
+80000064 li t1,2                             FD*                   (squashed: mispredict)
+80000066 bne a0,t1,8000006e <fail>            F*                   (squashed: mispredict)
+800000a0 li a0,1                               FDXMW
+800000a4 ret                                    FDXMW
+```
+
+`fence.i` sits in EX (`xxxxxxx`) while `jal` misses in IF, and acts at cycle
+155, the cycle the fill completes. Five cycles later `li a0,1`, the old code,
+is fetched from the I-cache as if nothing had happened. The I-cache now drops
+every line in that cycle too.
 
 ## JSON for animation
 

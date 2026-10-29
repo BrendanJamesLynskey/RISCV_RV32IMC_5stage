@@ -220,13 +220,13 @@ scripts/lint.sh                          # Verilator -Wall; waivers and reasons 
 |---|---|---|
 | riscv-tests `rv32ui`, `rv32um`, `rv32uc` | Every RV32I, M and C instruction, with bypass and hazard cases | all pass |
 | The same `rv32ui`/`rv32um` sources assembled **with C** | Mixed 16/32-bit code: 32-bit instructions straddling words, branches sharing a word | all pass |
-| Directed (`tests/directed`) | FENCE.I on cached code; misaligned-access traps; timer interrupts (cause, and nothing lost or run twice) | all pass |
+| Directed (`tests/directed`) | FENCE.I on cached code, and in the cycle an I-cache fill completes; misaligned-access traps; timer interrupts (cause, and nothing lost or run twice) | all pass |
 | Lockstep with Spike | Every ISA and directed test except `timer_irq` (Spike has no timer), compared instruction by instruction | all match |
 | Pipeline trace | Every ISA and directed test: the rebuilt pipeline matches the RTL's stage registers every cycle, and its retirements match the retire trace | all check |
 | SoC testbench + cocotb | Directed SoC program: GPIO, UART byte, caches, predictor training, ECALL | 30/30, 14/14 |
 | Verilator lint | `-Wall`, with four documented waivers | clean |
 
-That is 101 applicable ISA tests. Three upstream tests are listed as not applicable, with reasons in
+That is 102 applicable ISA tests. Three upstream tests are listed as not applicable, with reasons in
 `run_isa.sh`: `ma_data` twice (needs hardware misaligned access; this core traps, as the spec allows) and
 `fence_i` assembled with C (it overwrites compressed code). Spike behaves identically on all three. The directed
 tests were checked against mutants of the RTL with the behaviour removed, and each mutant fails.
@@ -272,6 +272,13 @@ hiding failures.
 | Interrupt cause | Timer interrupts reported as external | mcause hard-wired to 11 |
 | Interrupt precision, `minstret` | An interrupted instruction could run twice; `minstret` counted wrongly | No per-stage valid bits; fixed with valid bits and a retire port |
 | Branch prediction never helped a taken branch | A 2-instruction loop took 4 cycles per iteration | The mispredict check compared a taken branch's target with pc + 4, not with the predicted target, so every correctly predicted taken branch was flushed. Fixed: loops run at 1 IPC; the timer test needs 27% fewer cycles |
+
+**Found later**, reviewing the I-cache after the pipeline trace showed how fetch misses behave; confirmed by a
+new directed test, with the failing run's pipeline diagram in [doc/pipeline_trace.md](doc/pipeline_trace.md):
+
+| Bug | Symptom | Root cause |
+|---|---|---|
+| FENCE.I lost during an I-cache fill | Stale code ran after a patch, when the instruction after the fence started an uncached line | FENCE.I in EX waits out the fetch miss and acts in the cycle the filled word is delivered; the I-cache ignored `invalidate` in that state. Test `directed/fence_i_fill` |
 
 The test harness had bugs of its own, also fixed:
 - image paths over 128 characters were truncated, and the run continued on an all-NOP memory;

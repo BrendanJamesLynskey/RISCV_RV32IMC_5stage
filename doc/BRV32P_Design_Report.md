@@ -64,7 +64,7 @@ Machine-mode CSRs implemented: `mstatus`, `mie`, `mip`, `mepc`, `mcause`, `mtvec
 ### 3.5 Memory (MEM)
 
 - D-cache access (load or store) happens in this stage.
-- **Policy:** write-through, no-write-allocate. Stores write to both the cache and the backing SRAM via AXI.
+- **Policy:** write-through, write-allocate. Stores write to both the cache and the backing SRAM via AXI; a store miss first fills the line.
 - Peripheral accesses are routed through the AXI peripheral bridge; they stall the pipeline until the AXI handshake completes.
 
 ### 3.6 Write-Back (WB)
@@ -102,7 +102,7 @@ Both caches share the same organisation:
 | Line size | 32 bytes (8 words) |
 | Sets | 32 |
 | Replacement | LRU (1-bit pseudo-LRU per set) |
-| Write policy (D-cache) | Write-through, no-write-allocate |
+| Write policy (D-cache) | Write-through, write-allocate |
 
 Cache tags include a valid bit. There is no dirty bit in the I-cache. The D-cache does not implement a dirty bit because it is write-through; every store updates SRAM.
 

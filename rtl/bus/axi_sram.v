@@ -54,14 +54,11 @@ module axi_sram #(
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       rd_state    <= RD_IDLE;
-      rd_data_reg <= 32'b0;
     end else begin
       case (rd_state)
         RD_IDLE: begin
-          if (arvalid) begin
-            rd_data_reg <= mem[araddr[AW+1:2]];
+          if (arvalid)
             rd_state    <= RD_RESP;
-          end
         end
         RD_RESP: begin
           if (rready)
@@ -80,19 +77,14 @@ module axi_sram #(
   assign wready  = (wr_state == WR_IDLE) && awvalid && wvalid;
   assign bvalid  = (wr_state == WR_RESP);
 
-  integer wr_i;
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       wr_state <= WR_IDLE;
     end else begin
       case (wr_state)
         WR_IDLE: begin
-          if (awvalid && wvalid) begin
-            for (wr_i = 0; wr_i < 4; wr_i = wr_i + 1)
-              if (wstrb[wr_i])
-                mem[awaddr[AW+1:2]][wr_i*8 +: 8] <= wdata[wr_i*8 +: 8];
+          if (awvalid && wvalid)
             wr_state <= WR_RESP;
-          end
         end
         WR_RESP: begin
           if (bready)
@@ -101,6 +93,23 @@ module axi_sram #(
         default: wr_state <= WR_IDLE;
       endcase
     end
+  end
+
+  // ── Memory array ─────────────────────────────────────────────────────
+  // Kept out of the reset processes: one registered read port and one
+  // byte-enabled write port, the pattern FPGA tools map to block RAM. (An
+  // array accessed inside an async-reset process is built from flip-flops.)
+  wire rd_fire = (rd_state == RD_IDLE) && arvalid;
+  wire wr_fire = (wr_state == WR_IDLE) && awvalid && wvalid;
+
+  integer wr_i;
+  always @(posedge clk) begin
+    if (rd_fire)
+      rd_data_reg <= mem[araddr[AW+1:2]];
+    if (wr_fire)
+      for (wr_i = 0; wr_i < 4; wr_i = wr_i + 1)
+        if (wstrb[wr_i])
+          mem[awaddr[AW+1:2]][wr_i*8 +: 8] <= wdata[wr_i*8 +: 8];
   end
 
 endmodule

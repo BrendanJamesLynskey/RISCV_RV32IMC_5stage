@@ -39,9 +39,9 @@ module dcache #(
   localparam WORDS    = LINE_BYTES / 4;
 
   // ── Storage ──────────────────────────────────────────────────────────
-  reg [TAG_W-1:0] tag_mem  [0:SETS-1][0:WAYS-1];
+  reg [TAG_W-1:0] tag_mem  [0:SETS*WAYS-1];          // index {set, way}
   reg             valid_mem[0:SETS-1][0:WAYS-1];
-  reg [31:0]      data_mem [0:SETS-1][0:WAYS-1][0:WORDS-1];
+  reg [31:0]      data_mem [0:SETS*WAYS*WORDS-1];    // index {set, way, word}; 1-D so FPGA tools map it to LUT RAM
   reg             lru      [0:SETS-1];
 
   // ── Address decomposition ────────────────────────────────────────────
@@ -58,15 +58,15 @@ module dcache #(
   // ── Hit detection ────────────────────────────────────────────────────
   wire hit0, hit1, hit;
   wire hit_way;
-  assign hit0    = valid_mem[set_idx][0] && (tag_mem[set_idx][0] == tag);
-  assign hit1    = valid_mem[set_idx][1] && (tag_mem[set_idx][1] == tag);
+  assign hit0    = valid_mem[set_idx][0] && (tag_mem[{set_idx, 1'b0}] == tag);
+  assign hit1    = valid_mem[set_idx][1] && (tag_mem[{set_idx, 1'b1}] == tag);
   assign hit     = hit0 || hit1;
   assign hit_way = hit1;
 
   // ── Sub-word read logic ──────────────────────────────────────────────
   wire [31:0] raw_word;
-  assign raw_word = hit0 ? data_mem[set_idx][0][word_sel] :
-                           data_mem[set_idx][1][word_sel];
+  assign raw_word = hit0 ? data_mem[{set_idx, 1'b0, word_sel}] :
+                           data_mem[{set_idx, 1'b1, word_sel}];
 
   // Hoisted local variables for sub-word read
   reg [7:0]  byte_val;
@@ -196,9 +196,6 @@ module dcache #(
           if ((rd_en || wr_en) && hit) begin
             if (wr_en && !wbuf_valid) begin
               lru[set_idx] <= hit_way ? 1'b0 : 1'b1;
-              for (ii = 0; ii < 4; ii = ii + 1)
-                if (wstrb[ii])
-                  data_mem[set_idx][hit_way][word_sel][ii*8 +: 8] <= wdata_aligned[ii*8 +: 8];
               wbuf_valid <= 1'b1;
               wbuf_addr  <= addr;
               wbuf_data  <= wdata_aligned;
@@ -219,9 +216,7 @@ module dcache #(
 
         DC_FILL: begin
           if (!wbuf_valid && mem_valid) begin
-            data_mem[set_idx][fill_way][fill_cnt] <= mem_rdata;
             if (fill_cnt == 2'd3) begin
-              tag_mem[set_idx][fill_way]   <= tag;
               valid_mem[set_idx][fill_way] <= 1'b1;
               lru[set_idx]                 <= fill_way ? 1'b0 : 1'b1;
               state                        <= DC_FILL_DONE;
@@ -233,9 +228,6 @@ module dcache #(
 
         DC_FILL_DONE: begin
           if (pending_is_write) begin
-            for (ii = 0; ii < 4; ii = ii + 1)
-              if (pending_wstrb[ii])
-                data_mem[set_idx][fill_way][word_sel][ii*8 +: 8] <= pending_wdata[ii*8 +: 8];
             wbuf_valid <= 1'b1;
             wbuf_addr  <= pending_addr;
             wbuf_data  <= pending_wdata;
@@ -252,6 +244,45 @@ module dcache #(
         default: state <= DC_IDLE;
       endcase
     end
+  end
+
+  // ── Data and tag arrays ──────────────────────────────────────────────
+  // Written outside the reset process, through one write port (the three
+  // cases are exclusive by state), so FPGA tools build them as LUT RAM
+  // rather than flip-flops. Valid bits and LRU stay in the reset process.
+  wire dw_hit  = (state == DC_IDLE) && wr_en && hit && !wbuf_valid;   // store hit
+  wire dw_fill = (state == DC_FILL) && !wbuf_valid && mem_valid;      // line fill, one word
+  wire dw_pend = (state == DC_FILL_DONE) && pending_is_write;         // store after a write-miss fill
+
+  reg                 dw_way;
+  reg [OFFSET_W-3:0]  dw_word;
+  reg [31:0]          dw_data;
+  reg [3:0]           dw_strb;
+  always @(*) begin
+    dw_way  = fill_way;
+    dw_word = word_sel;
+    dw_data = pending_wdata;
+    dw_strb = 4'b0000;
+    if (dw_hit) begin
+      dw_way  = hit_way;
+      dw_data = wdata_aligned;
+      dw_strb = wstrb;
+    end else if (dw_fill) begin
+      dw_word = fill_cnt;
+      dw_data = mem_rdata;
+      dw_strb = 4'b1111;
+    end else if (dw_pend) begin
+      dw_strb = pending_wstrb;
+    end
+  end
+
+  integer bi;
+  always @(posedge clk) begin
+    for (bi = 0; bi < 4; bi = bi + 1)
+      if (dw_strb[bi])
+        data_mem[{set_idx, dw_way, dw_word}][bi*8 +: 8] <= dw_data[bi*8 +: 8];
+    if (dw_fill && fill_cnt == 2'd3)
+      tag_mem[{set_idx, fill_way}] <= tag;
   end
 
 endmodule

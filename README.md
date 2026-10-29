@@ -95,17 +95,19 @@ RISCV_RV32IMC_5stage/
 ├── tests/
 │   ├── isa/
 │   │   ├── run_isa.sh                # Build and run the ISA tests (+ Spike lockstep)
-│   │   ├── tb_isa.v                  # ISA testbench: tohost detection, commit log
+│   │   ├── tb_isa.v                  # ISA testbench: tohost detection, commit log, pipeline trace
 │   │   ├── lockstep.py               # Compare the commit log with Spike's
 │   │   ├── elf2hex.py                # ELF image → $readmemh hex
 │   │   └── env/                      # Bare-metal test environment (riscv_test.h, link.ld)
 │   └── directed/                     # Own tests: FENCE.I, misaligned traps, interrupts
 ├── scripts/
 │   ├── lint.sh                       # Verilator -Wall lint
+│   ├── pipeview.py                   # Pipeline trace: check, diagrams, JSON for animation
 │   └── lint_waivers.vlt              # The waived rules, each with its reason
-├── .github/workflows/ci.yml          # CI: ISA + lockstep, testbenches, lint
+├── .github/workflows/ci.yml          # CI: ISA + lockstep + pipeline trace, testbenches, lint
 ├── doc/
-│   └── BRV32P_Design_Report.md       # Detailed micro-architecture write-up
+│   ├── BRV32P_Design_Report.md       # Detailed micro-architecture write-up
+│   └── pipeline_trace.md             # The pipeline trace, its checking, and real diagrams
 └── README.md
 ```
 
@@ -187,6 +189,25 @@ store to `tohost`, which the testbench sees on the core's retire trace. With Spi
 runs on Spike, and `lockstep.py` compares the two commit logs instruction by instruction: pc, encoding, register
 write and store. Any difference fails the test and is shown with context.
 
+### Pipeline trace and diagrams
+
+Each ISA test also records a per-cycle pipeline trace: what every stage holds and every stall, flush, forward,
+miss, mispredict and trap. `scripts/pipeview.py` rebuilds each instruction's path through the pipeline from it,
+checks the rebuild against the RTL on every cycle and against the retire trace (a mismatch fails the test), and
+draws pipeline diagrams or exports JSON for animation:
+
+```bash
+scripts/pipeview.py diagram tests/isa/build/rv32ui-lw.pipe --dis tests/isa/build/rv32ui-lw.dis --event load-use
+```
+
+```
+8000019c lw a4,4(a3)                ddddddXMW
+800001a0 mv t1,a4                   ffffffDdXMWwwwwwwwwwww     <- one load-use bubble, then forwarded from WB
+```
+
+See [doc/pipeline_trace.md](doc/pipeline_trace.md) for the format, the checking method, and real diagrams of
+load-use, mispredicts, MUL/DIV, an interrupt and cache misses.
+
 ### Lint
 
 ```bash
@@ -201,6 +222,7 @@ scripts/lint.sh                          # Verilator -Wall; waivers and reasons 
 | The same `rv32ui`/`rv32um` sources assembled **with C** | Mixed 16/32-bit code: 32-bit instructions straddling words, branches sharing a word | all pass |
 | Directed (`tests/directed`) | FENCE.I on cached code; misaligned-access traps; timer interrupts (cause, and nothing lost or run twice) | all pass |
 | Lockstep with Spike | Every ISA and directed test except `timer_irq` (Spike has no timer), compared instruction by instruction | all match |
+| Pipeline trace | Every ISA and directed test: the rebuilt pipeline matches the RTL's stage registers every cycle, and its retirements match the retire trace | all check |
 | SoC testbench + cocotb | Directed SoC program: GPIO, UART byte, caches, predictor training, ECALL | 30/30, 14/14 |
 | Verilator lint | `-Wall`, with four documented waivers | clean |
 

@@ -7,6 +7,9 @@
 //   +tohost=<hex>      address of the test's tohost word
 //   +trace=<file>      optional: write the retire trace as a commit log
 //   +timeout=<cycles>  optional: default 200000
+//   +pipe=<file>       optional: write a per-cycle pipeline trace (what each
+//                      stage holds and the hazard unit's decisions), read by
+//                      scripts/pipeview.py
 // The test stores 1 to tohost on success, or (testnum << 1) | 1 on failure;
 // the store is seen on the core's retire trace. Prints one line:
 //   RESULT PASS|FAIL|TIMEOUT <cycles> cycles <n> retired [failing test case]
@@ -36,9 +39,9 @@ module tb_isa;
 
   `define CORE dut.u_core
 
-  reg [8*512-1:0] hex_file, trace_file;   // paths up to 512 characters
+  reg [8*512-1:0] hex_file, trace_file, pipe_file;   // paths up to 512 characters
   reg [31:0]   tohost;
-  integer      timeout, cycles, retired, trace_fd, hex_fd;
+  integer      timeout, cycles, retired, trace_fd, hex_fd, pipe_fd;
 
   initial begin
     if (!$value$plusargs("hex=%s", hex_file)) begin
@@ -52,6 +55,16 @@ module tb_isa;
     if (!$value$plusargs("timeout=%d", timeout)) timeout = 200000;
     trace_fd = 0;
     if ($value$plusargs("trace=%s", trace_file)) trace_fd = $fopen(trace_file, "w");
+    pipe_fd = 0;
+    if ($value$plusargs("pipe=%s", pipe_file)) begin
+      pipe_fd = $fopen(pipe_file, "w");
+      $fwrite(pipe_fd, "# brv32p pipe v1: cycle pc_if fetch_valid straddle imem_stall pred_taken");
+      $fwrite(pipe_fd, " | valid_id pc_id raw_id | valid_ex pc_ex raw_ex rs1_ex rs2_ex fwd_rs1 fwd_rs2");
+      $fwrite(pipe_fd, " | valid_mem pc_mem raw_mem rd_mem dmem_rd dmem_wr dmem_stall");
+      $fwrite(pipe_fd, " | valid_wb pc_wb raw_wb rd_we rd_wb rd_data");
+      $fwrite(pipe_fd, " | stall_if stall_id stall_ex flush_id flush_ex flush_mem mem_stall");
+      $fwrite(pipe_fd, " load_use muldiv_busy mispredict trap_enter exc_mem irq_take mret fencei trap_cause\n");
+    end
 
     // $readmemh only warns if the file is missing, which would leave the
     // memory full of NOPs; fail loudly instead
@@ -89,6 +102,33 @@ module tb_isa;
   end
   endtask
 
+  // Pipeline trace: one line per cycle, sampled on the falling edge, when the
+  // registers hold this cycle's contents and the combinational control
+  // (stalls, flushes, forwarding) has settled. The next rising edge acts on it.
+  integer pipe_cycle;
+  initial pipe_cycle = 0;
+  always @(negedge clk) if (rst_n && pipe_fd != 0) begin
+    pipe_cycle = pipe_cycle + 1;
+    $fwrite(pipe_fd, "%0d %08h %0d %0d %0d %0d",
+            pipe_cycle, `CORE.pc_if, `CORE.fetch_valid, `CORE.straddle, `CORE.imem_stall,
+            `CORE.bp_pred_taken && `CORE.bp_pred_valid);
+    $fwrite(pipe_fd, " | %0d %08h %08h | %0d %08h %08h %0d %0d %0d %0d",
+            `CORE.valid_id, `CORE.pc_id, `CORE.raw_id,
+            `CORE.valid_ex, `CORE.pc_ex, `CORE.raw_ex, `CORE.rs1_addr_ex, `CORE.rs2_addr_ex,
+            `CORE.fwd_rs1, `CORE.fwd_rs2);
+    $fwrite(pipe_fd, " | %0d %08h %08h %0d %0d %0d %0d",
+            `CORE.valid_mem, `CORE.pc_mem, `CORE.raw_mem, `CORE.rd_addr_mem,
+            `CORE.dmem_rd, `CORE.dmem_wr, `CORE.dmem_stall);
+    $fwrite(pipe_fd, " | %0d %08h %08h %0d %0d %08h",
+            `CORE.valid_wb, `CORE.pc_wb, `CORE.raw_wb, `CORE.wb_wr_en, `CORE.rd_addr_wb, `CORE.wb_rd_data);
+    $fwrite(pipe_fd, " | %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %08h\n",
+            `CORE.stall_if, `CORE.stall_id, `CORE.stall_ex,
+            `CORE.flush_id, `CORE.flush_ex, `CORE.flush_mem, `CORE.mem_stall,
+            `CORE.u_hazard.load_use_hazard, `CORE.muldiv_busy, `CORE.branch_mispredict_ex,
+            `CORE.trap_enter, `CORE.exc_mem, `CORE.irq_take, `CORE.mret_ex, `CORE.fencei_take,
+            `CORE.trap_cause);
+  end
+
   initial begin
     rst_n   = 0;
     cycles  = 0;
@@ -112,12 +152,14 @@ module tb_isa;
           $display("RESULT FAIL %0d cycles %0d retired test case %0d",
                    cycles, retired, `CORE.retire_mem_wdata >> 1);
         if (trace_fd != 0) $fclose(trace_fd);
+        if (pipe_fd != 0) $fclose(pipe_fd);
         $finish;
       end
     end
     if (cycles >= timeout) begin
       $display("RESULT TIMEOUT %0d cycles %0d retired (last pc 0x%08h)", cycles, retired, `CORE.retire_pc);
       if (trace_fd != 0) $fclose(trace_fd);
+      if (pipe_fd != 0) $fclose(pipe_fd);
       $finish;
     end
   end

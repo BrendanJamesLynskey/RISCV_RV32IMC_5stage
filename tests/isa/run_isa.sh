@@ -8,6 +8,9 @@
 # Lockstep: if Spike is found ($SPIKE, or spike on the PATH), each test also
 #        runs on Spike and the two commit logs are compared instruction by
 #        instruction (lockstep.py); a mismatch fails the test. LOCKSTEP=0 skips.
+# Pipeline trace: each test also writes a per-cycle pipeline trace (.pipe),
+#        and scripts/pipeview.py checks it against the retire trace; a
+#        mismatch fails the test. PIPE=0 skips.
 # Writes build output to tests/isa/build/ and a summary to build/results.txt.
 # Exits non-zero if any test fails.
 set -euo pipefail
@@ -54,6 +57,7 @@ declare -A NOT_APPLICABLE=(
 
 SPIKE="${SPIKE:-$(command -v spike || true)}"
 LOCKSTEP="${LOCKSTEP:-1}"
+PIPE="${PIPE:-1}"
 [ -x "$SPIKE" ] || LOCKSTEP=0
 
 tests=("$@")
@@ -84,7 +88,14 @@ for t in "${tests[@]}"; do
   python3 "$HERE/elf2hex.py" "$out.bin" "$out.hex"
   "${CROSS}objdump" -d "$out.elf" > "$out.dis"
   tohost=$("${CROSS}nm" "$out.elf" | awk '$3 == "tohost" { print $1 }')
-  result=$(cd "$B" && vvp -n tb_isa.vvp +hex="$out.hex" +tohost="$tohost" +trace="$out.trace" | grep '^RESULT' || echo "RESULT ERROR (simulator)")
+  pipe_arg=(); [ "$PIPE" = 1 ] && pipe_arg=(+pipe="$out.pipe")
+  result=$(cd "$B" && vvp -n tb_isa.vvp +hex="$out.hex" +tohost="$tohost" +trace="$out.trace" "${pipe_arg[@]}" | grep '^RESULT' || echo "RESULT ERROR (simulator)")
+  pipe_note=""
+  if [ "$PIPE" = 1 ]; then
+    pipe_out=$(python3 "$ROOT/scripts/pipeview.py" check "$out.pipe" "$out.trace" | tail -n 1) || true
+    pipe_note="  [pipe: ${pipe_out#PIPE }]"
+    case "$pipe_out" in "PIPE OK"*) ;; *) result="RESULT FAIL pipe trace" ;; esac
+  fi
   ls_note=""
   if [ "$LOCKSTEP" = 1 ] && [[ "$NO_LOCKSTEP" != *" $t "* ]]; then
     timeout 120 "$SPIKE" --isa="${MARCH[$suite]}" -m0x80000000:0x8000 --log-commits "$out.elf" 2> "$out.spike" || true
@@ -92,7 +103,7 @@ for t in "${tests[@]}"; do
     ls_note="  [lockstep: $ls_out]"
     case "$ls_out" in MATCH*) ;; *) result="RESULT FAIL lockstep" ;; esac
   fi
-  printf '%-22s %s%s\n' "$t" "${result#RESULT }" "$ls_note" | tee -a "$B/results.txt"
+  printf '%-22s %s%s%s\n' "$t" "${result#RESULT }" "$ls_note" "$pipe_note" | tee -a "$B/results.txt"
   case "$result" in "RESULT PASS"*) ;; *) fails=$((fails + 1)) ;; esac
 done
 

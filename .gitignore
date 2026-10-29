@@ -1,3 +1,4 @@
 tests/isa/build/
 tests/isa/riscv-tests/
 build/
+__pycache__/

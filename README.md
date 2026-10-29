@@ -396,15 +396,19 @@ Artix-7 on a Digilent Nexys A7-100T; 100 MHz target. Whole SoC, with the 32 KB S
 
 | Resource | Used | Available | |
 |---|---|---|---|
-| LUTs | 8,030 | 63,400 | 12.7% (1,456 of them as LUT RAM: the cache arrays) |
-| Registers | 7,324 | 126,800 | 5.8% |
+| LUTs | 8,476 | 63,400 | 13.4% (the cache arrays are LUT RAM; the DSP unit is 349) |
+| Registers | 7,458 | 126,800 | 5.9% |
 | Block RAM (36 Kb) | 8 | 135 | the 32 KB SRAM |
-| DSP48 | 12 | 240 | the 32×32 multiplier |
-| **Fmax** | **62.3 MHz** | | WNS −6.05 ns at 10 ns |
+| DSP48 | 15 | 240 | 12 for the 32×32 multiplier, 3 for the DSP unit's two 16×16 multipliers |
+| **Fmax** | **58.8 MHz** | | WNS −7.0 ns at 10 ns |
 
-**Critical path** (17 logic levels, 15.9 ns, 70% routing): the next-PC loop, from `pc_if` through the I-cache
-LUT-RAM read, the RV32C alignment and the next-PC selection, back into `pc_if`. Fetching, aligning and predicting
-in one cycle is what limits the clock. Splitting fetch into two stages is the obvious next step.
+**Critical path** (16 logic levels, 16.9 ns, 49% routing): from the EX operand registers through forwarding
+into the single-cycle 32×32 multiplier (two DSP48 cascades and the carry chain of the final add), into the EX/MEM
+result register. The next-PC loop used to be the limit (62.3 MHz); the multiplier overtook it as the core
+grew. Splitting the multiply over two stages (the carry-save tree in EX, the final add in MEM) is the next step.
+
+Fmax over the changes on the way: 61.6 MHz before the early straddle, 58.4 MHz after it, 58.8 MHz with the DSP
+unit. The DSP unit cost 390 LUTs and 3 DSP48s and did not move the critical path.
 
 **What changed to get here.** An earlier run built every memory from flip-flops (about 43k LUTs and 78k
 registers; it did not fit an Artix-7 35T). Two coding changes fixed it:

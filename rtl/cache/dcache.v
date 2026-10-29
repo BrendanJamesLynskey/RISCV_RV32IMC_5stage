@@ -39,9 +39,9 @@ module dcache #(
   localparam WORDS    = LINE_BYTES / 4;
 
   // ── Storage ──────────────────────────────────────────────────────────
-  reg [TAG_W-1:0] tag_mem  [0:SETS-1][0:WAYS-1];
+  reg [TAG_W-1:0] tag_mem  [0:SETS*WAYS-1];          // index {set, way}
   reg             valid_mem[0:SETS-1][0:WAYS-1];
-  reg [31:0]      data_mem [0:SETS-1][0:WAYS-1][0:WORDS-1];
+  reg [31:0]      data_mem [0:SETS*WAYS*WORDS-1];    // index {set, way, word}; 1-D so FPGA tools map it to LUT RAM
   reg             lru      [0:SETS-1];
 
   // ── Address decomposition ────────────────────────────────────────────
@@ -58,15 +58,15 @@ module dcache #(
   // ── Hit detection ────────────────────────────────────────────────────
   wire hit0, hit1, hit;
   wire hit_way;
-  assign hit0    = valid_mem[set_idx][0] && (tag_mem[set_idx][0] == tag);
-  assign hit1    = valid_mem[set_idx][1] && (tag_mem[set_idx][1] == tag);
+  assign hit0    = valid_mem[set_idx][0] && (tag_mem[{set_idx, 1'b0}] == tag);
+  assign hit1    = valid_mem[set_idx][1] && (tag_mem[{set_idx, 1'b1}] == tag);
   assign hit     = hit0 || hit1;
   assign hit_way = hit1;
 
   // ── Sub-word read logic ──────────────────────────────────────────────
   wire [31:0] raw_word;
-  assign raw_word = hit0 ? data_mem[set_idx][0][word_sel] :
-                           data_mem[set_idx][1][word_sel];
+  assign raw_word = hit0 ? data_mem[{set_idx, 1'b0, word_sel}] :
+                           data_mem[{set_idx, 1'b1, word_sel}];
 
   // Hoisted local variables for sub-word read
   reg [7:0]  byte_val;
@@ -280,9 +280,9 @@ module dcache #(
   always @(posedge clk) begin
     for (bi = 0; bi < 4; bi = bi + 1)
       if (dw_strb[bi])
-        data_mem[set_idx][dw_way][dw_word][bi*8 +: 8] <= dw_data[bi*8 +: 8];
+        data_mem[{set_idx, dw_way, dw_word}][bi*8 +: 8] <= dw_data[bi*8 +: 8];
     if (dw_fill && fill_cnt == 2'd3)
-      tag_mem[set_idx][fill_way] <= tag;
+      tag_mem[{set_idx, fill_way}] <= tag;
   end
 
 endmodule

@@ -9,6 +9,10 @@
 set part   [expr {[llength $argv] > 0 ? [lindex $argv 0] : "xc7a100tcsg324-1"}]
 set period [expr {[llength $argv] > 1 ? [lindex $argv 1] : 10.0}]
 set out    build/vivado
+
+# Single-threaded keeps the peak memory down (each worker process holds its
+# own copy of the design); runs one at a time on a 16 GB machine
+set_param general.maxThreads 1
 file mkdir $out
 
 read_verilog [glob rtl/core/*.v rtl/cache/*.v rtl/bus/*.v rtl/periph/*.v] rtl/brv32p_soc.v

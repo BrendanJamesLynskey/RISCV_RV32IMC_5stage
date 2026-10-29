@@ -30,9 +30,9 @@ module icache #(
   localparam WORDS    = LINE_BYTES / 4;        // 4
 
   // ── Storage ──────────────────────────────────────────────────────────
-  reg [TAG_W-1:0]    tag_mem  [0:SETS-1][0:WAYS-1];
+  reg [TAG_W-1:0]    tag_mem  [0:SETS*WAYS-1];          // index {set, way}
   reg                valid_mem[0:SETS-1][0:WAYS-1];
-  reg [31:0]         data_mem [0:SETS-1][0:WAYS-1][0:WORDS-1];
+  reg [31:0]         data_mem [0:SETS*WAYS*WORDS-1];    // index {set, way, word}; 1-D so FPGA tools map it to LUT RAM
   reg                lru      [0:SETS-1]; // 0 = way0 is LRU
 
   // ── Address decomposition ────────────────────────────────────────────
@@ -46,8 +46,8 @@ module icache #(
 
   // ── Hit detection ────────────────────────────────────────────────────
   wire hit_way0, hit_way1, hit;
-  assign hit_way0 = valid_mem[set][0] && (tag_mem[set][0] == tag);
-  assign hit_way1 = valid_mem[set][1] && (tag_mem[set][1] == tag);
+  assign hit_way0 = valid_mem[set][0] && (tag_mem[{set, 1'b0}] == tag);
+  assign hit_way1 = valid_mem[set][1] && (tag_mem[{set, 1'b1}] == tag);
   assign hit      = hit_way0 || hit_way1;
 
   // ── FSM ──────────────────────────────────────────────────────────────
@@ -69,8 +69,8 @@ module icache #(
       S_IDLE: begin
         if (rd_en && hit) begin
           ready = 1'b1;
-          rdata = hit_way0 ? data_mem[set][0][word_sel] :
-                             data_mem[set][1][word_sel];
+          rdata = hit_way0 ? data_mem[{set, 1'b0, word_sel}] :
+                             data_mem[{set, 1'b1, word_sel}];
         end else if (rd_en && !hit) begin
           ready = 1'b0;
         end else begin
@@ -84,7 +84,7 @@ module icache #(
       end
       S_DONE: begin
         ready = 1'b1;
-        rdata = data_mem[set][fill_way][word_sel];
+        rdata = data_mem[{set, fill_way, word_sel}];
       end
       default: begin
         ready = 1'b0;
@@ -146,9 +146,9 @@ module icache #(
   // rather than flip-flops (the valid bits keep their reset)
   always @(posedge clk) begin
     if (state == S_FILL && mem_valid) begin
-      data_mem[set][fill_way][fill_word_cnt] <= mem_rdata;
+      data_mem[{set, fill_way, fill_word_cnt}] <= mem_rdata;
       if (fill_word_cnt == 2'd3)
-        tag_mem[set][fill_way] <= tag;
+        tag_mem[{set, fill_way}] <= tag;
     end
   end
 

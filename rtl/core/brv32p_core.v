@@ -2,7 +2,9 @@
 // brv32p_core.v — 5-Stage Pipelined RV32IMC CPU Core
 // ============================================================================
 
-module brv32p_core (
+module brv32p_core #(
+  parameter [31:0] RESET_PC = 32'h0000_0000
+) (
   input  wire        clk,
   input  wire        rst_n,
 
@@ -24,7 +26,23 @@ module brv32p_core (
 
   // Interrupts
   input  wire        ext_irq,
-  input  wire        timer_irq
+  input  wire        timer_irq,
+
+  // FENCE.I: invalidate the instruction cache
+  output wire        icache_invalidate,
+
+  // Retire trace: one pulse per retired instruction, in program order.
+  // Not used by the SoC; testbenches compare it against a reference model.
+  output wire        retire_valid,
+  output wire [31:0] retire_pc,
+  output wire [31:0] retire_insn,      // raw encoding; [31:16] = 0 for RVC
+  output wire        retire_rd_we,
+  output wire [4:0]  retire_rd_addr,
+  output wire [31:0] retire_rd_wdata,
+  output wire        retire_mem_we,
+  output wire [31:0] retire_mem_addr,
+  output wire [31:0] retire_mem_wdata,
+  output wire [1:0]  retire_mem_width
 );
 
   `include "brv32p_defs.vh"
@@ -54,17 +72,44 @@ module brv32p_core (
   wire        bp_pred_valid;
   wire        is_compressed_if;
 
+  // Instruction alignment (RV32C). Memory returns aligned 32-bit words, but
+  // instructions are 16 or 32 bits on any 16-bit boundary:
+  //   pc[1] = 0: the instruction starts in the low half of the word;
+  //   pc[1] = 1: it starts in the high half. If that half is a compressed
+  //              instruction, use it; otherwise the instruction straddles
+  //              two words. Keep the half in half_buf, fetch the next word
+  //              (sending a bubble to ID meanwhile), then join the halves.
+  reg         straddle;          // half_buf holds the low half of the instruction at pc_if
+  reg  [15:0] half_buf;
+  wire        fetch_valid;       // instr_raw_if is a complete instruction this cycle
+  wire [15:0] half_at_pc = pc_if[1] ? imem_rdata[31:16] : imem_rdata[15:0];
+  wire        straddle_start = !straddle && pc_if[1] && (half_at_pc[1:0] == 2'b11);
+  wire        if_advance = !stall_if && !mem_stall;
+  wire        redirect;          // mispredict, trap, MRET or FENCE.I this cycle
+  wire        fencei_take;       // FENCE.I in EX acts this cycle (defined in EX)
+
+  assign fetch_valid  = !straddle_start;
+  assign instr_raw_if = straddle                   ? {imem_rdata[15:0], half_buf} :
+                        (half_at_pc[1:0] != 2'b11) ? {16'b0, half_at_pc}         :
+                                                     imem_rdata;
+  assign imem_addr    = {pc_if[31:2] + {29'b0, straddle}, 2'b00};
+  assign imem_rd      = 1'b1;
+
   // PC Register
   always @(posedge clk or negedge rst_n) begin
-    if (!rst_n)
-      pc_if <= RESET_VECTOR;
-    else if (!stall_if && !mem_stall)
-      pc_if <= pc_next;
+    if (!rst_n) begin
+      pc_if    <= RESET_PC;
+      straddle <= 1'b0;
+      half_buf <= 16'b0;
+    end else if (redirect && !mem_stall) begin
+      pc_if    <= pc_next;
+      straddle <= 1'b0;
+    end else if (if_advance) begin
+      pc_if    <= pc_next;           // holds pc_if while a straddle is pending
+      straddle <= straddle_start;
+      if (straddle_start) half_buf <= half_at_pc;
+    end
   end
-
-  assign imem_addr = pc_if;
-  assign imem_rd   = 1'b1;
-  assign instr_raw_if = imem_rdata;
 
   // Compressed decoder
   wire [31:0] instr_expanded_if;
@@ -105,6 +150,8 @@ module brv32p_core (
   wire [31:0] pc_inc;
   assign pc_inc = is_compressed_if ? 32'd2 : 32'd4;
 
+  assign redirect = trap_enter || mret_ex || branch_mispredict_ex || fencei_take;
+
   always @(*) begin
     if (trap_enter)
       pc_next = mtvec_out;
@@ -112,6 +159,10 @@ module brv32p_core (
       pc_next = mepc_out;
     else if (branch_mispredict_ex)
       pc_next = branch_target_ex;
+    else if (fencei_take)
+      pc_next = pc_ex + pc_inc_ex;
+    else if (!fetch_valid)
+      pc_next = pc_if;               // first half of a straddling instruction
     else if (bp_pred_taken && bp_pred_valid)
       pc_next = bp_pred_target;
     else
@@ -125,6 +176,8 @@ module brv32p_core (
   reg [31:0] pc_inc_id;
   reg        pred_taken_id;
   reg        illegal_c_id;
+  reg        valid_id;                  // stage holds a real instruction, not a bubble
+  reg [31:0] raw_id;                    // original encoding, for the retire trace
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n || flush_id) begin
@@ -133,12 +186,16 @@ module brv32p_core (
       pc_inc_id     <= 32'd4;
       pred_taken_id <= 1'b0;
       illegal_c_id  <= 1'b0;
+      valid_id      <= 1'b0;
+      raw_id        <= 32'b0;
     end else if (!stall_id && !mem_stall) begin
       pc_id         <= pc_if;
-      instr_id      <= instr_expanded_if;
+      instr_id      <= fetch_valid ? instr_expanded_if : 32'h0000_0013;  // NOP while a straddle completes
       pc_inc_id     <= pc_inc;
-      pred_taken_id <= bp_pred_taken && bp_pred_valid;
-      illegal_c_id  <= illegal_c_if;
+      pred_taken_id <= bp_pred_taken && bp_pred_valid && fetch_valid;
+      illegal_c_id  <= illegal_c_if && fetch_valid;
+      valid_id      <= fetch_valid;
+      raw_id        <= instr_raw_if;
     end
   end
 
@@ -184,9 +241,27 @@ module brv32p_core (
   reg [4:0]          rs1_addr_ex, rs2_addr_ex, rd_addr_ex;
   reg [`CTRL_W-1:0]  ctrl_ex;
   reg                pred_taken_ex;
+  reg                valid_ex;
+  reg [31:0]         raw_ex;
 
+  // An illegal compressed instruction traps; clear its other control bits so
+  // the expansion it produced cannot write anything
+  reg [`CTRL_W-1:0] ctrl_id_eff;
+  always @(*) begin
+    ctrl_id_eff = ctrl_id;
+    if (illegal_c_id) begin
+      ctrl_id_eff = {`CTRL_W{1'b0}};
+      ctrl_id_eff[`CTRL_ILLEGAL] = 1'b1;
+    end
+  end
+
+  // flush_ex from a load-use hazard inserts a bubble as the load moves on to
+  // MEM; during a memory stall the load is held in EX, so it must not fire
+  // (mispredict and trap flushes are already gated by mem_stall).
   always @(posedge clk or negedge rst_n) begin
-    if (!rst_n || flush_ex) begin
+    if (!rst_n || (flush_ex && !mem_stall)) begin
+      valid_ex      <= 1'b0;
+      raw_ex        <= 32'b0;
       ctrl_ex       <= {`CTRL_W{1'b0}};
       pc_ex         <= 32'b0;
       rs1_data_ex   <= 32'b0;
@@ -198,7 +273,7 @@ module brv32p_core (
       rd_addr_ex    <= 5'b0;
       pred_taken_ex <= 1'b0;
     end else if (!stall_ex && !mem_stall) begin
-      ctrl_ex       <= ctrl_id;
+      ctrl_ex       <= ctrl_id_eff;
       pc_ex         <= pc_id;
       rs1_data_ex   <= rs1_data_raw;
       rs2_data_ex   <= rs2_data_raw;
@@ -208,6 +283,8 @@ module brv32p_core (
       rs2_addr_ex   <= rs2_addr_id;
       rd_addr_ex    <= rd_addr_id;
       pred_taken_ex <= pred_taken_id;
+      valid_ex      <= valid_id;
+      raw_ex        <= raw_id;
     end
   end
 
@@ -259,6 +336,8 @@ module brv32p_core (
     .clk    (clk),
     .rst_n  (rst_n),
     .start  (ctrl_ex[`CTRL_MULDIV_EN]),
+    .hold   (mem_stall),
+    .kill   (flush_ex && !mem_stall),
     .op     (ctrl_ex[`CTRL_MULDIV_OP]),
     .a      (rs1_fwd),
     .b      (rs2_fwd),
@@ -299,12 +378,30 @@ module brv32p_core (
   // when the pipeline advances. During a memory stall the EX and MEM
   // instructions are held, so acting early would flush the branch or jump
   // itself while its redirect is lost (the PC does not load while stalled).
-  assign branch_mispredict_ex = !mem_stall && is_branch_or_jump &&
-    ((actual_taken != pred_taken_ex) ||
-     (actual_taken && (branch_target_computed != pc_ex + pc_inc_ex)));
+  // A taken prediction for an instruction that is not a branch or jump (a
+  // BTB alias, or a stale entry) is also a mispredict: fall through to pc+len.
+  assign branch_mispredict_ex = !mem_stall && valid_ex &&
+    ((is_branch_or_jump &&
+      ((actual_taken != pred_taken_ex) ||
+       (actual_taken && (branch_target_computed != pc_ex + pc_inc_ex)))) ||
+     (!is_branch_or_jump && pred_taken_ex));
 
   assign branch_target_ex = actual_taken ? branch_target_computed :
                             (pc_ex + pc_inc_ex);
+
+  // Misaligned load or store: the address is known here, the exception is
+  // taken when the instruction reaches MEM (the access itself is suppressed)
+  wire mem_access_ex = ctrl_ex[`CTRL_MEM_RD] || ctrl_ex[`CTRL_MEM_WR];
+  wire misaligned_ex = mem_access_ex &&
+    ((ctrl_ex[`CTRL_MEM_WIDTH] == 2'd1 && alu_result_ex[0]) ||
+     (ctrl_ex[`CTRL_MEM_WIDTH] == 2'd2 && alu_result_ex[1:0] != 2'b00));
+
+  // FENCE.I (MISC-MEM, funct3 = 001): invalidate the I-cache and refetch the
+  // next instruction, so nothing fetched before the fence runs. The D-cache
+  // is write-through, so older stores are already in memory.
+  wire fencei_ex = valid_ex && (raw_ex[6:0] == 7'b0001111) && (raw_ex[14:12] == 3'b001);
+  assign fencei_take = !mem_stall && fencei_ex;
+  assign icache_invalidate = fencei_take;
 
   // Branch predictor update
   assign bp_update_en     = !mem_stall && (ctrl_ex[`CTRL_BR_TYPE] != BR_NONE);  // once per branch
@@ -335,7 +432,10 @@ module brv32p_core (
   reg [4:0]          rd_addr_mem;
   reg [`CTRL_W-1:0]  ctrl_mem;
 
-  assign alu_result_mem = ex_result_mem;  // Forwarding tap
+
+  reg                valid_mem;
+  reg [31:0]         raw_mem;
+  reg                misaligned_mem;
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n || flush_mem) begin
@@ -344,12 +444,20 @@ module brv32p_core (
       ex_result_mem  <= 32'b0;
       rs2_data_mem   <= 32'b0;
       rd_addr_mem    <= 5'b0;
+      misaligned_mem <= 1'b0;
+      valid_mem      <= 1'b0;
+      raw_mem        <= 32'b0;
     end else if (!mem_stall) begin
       ctrl_mem       <= ctrl_ex;
       pc_mem         <= pc_ex;
       ex_result_mem  <= ex_result;
       rs2_data_mem   <= rs2_fwd;
       rd_addr_mem    <= rd_addr_ex;
+      misaligned_mem <= misaligned_ex;
+      // While EX is stalled (multi-cycle MUL/DIV) this register keeps copying
+      // the waiting instruction; only the final copy is a real instruction.
+      valid_mem      <= valid_ex && !stall_ex;
+      raw_mem        <= raw_ex;
     end
   end
 
@@ -357,8 +465,8 @@ module brv32p_core (
   // MEM — Memory Access
   // ════════════════════════════════════════════════════════════════════
   assign dmem_addr     = ex_result_mem;
-  assign dmem_rd       = ctrl_mem[`CTRL_MEM_RD];
-  assign dmem_wr       = ctrl_mem[`CTRL_MEM_WR];
+  assign dmem_rd       = ctrl_mem[`CTRL_MEM_RD] && !misaligned_mem;
+  assign dmem_wr       = ctrl_mem[`CTRL_MEM_WR] && !misaligned_mem;
   assign dmem_width    = ctrl_mem[`CTRL_MEM_WIDTH];
   assign dmem_sign_ext = ctrl_mem[`CTRL_MEM_SIGN];
   assign dmem_wdata    = rs2_data_mem;
@@ -369,11 +477,24 @@ module brv32p_core (
 
   // Trap logic
   wire        irq_pending;
+  wire [4:0]  irq_code;
   wire [31:0] csr_rdata;
 
-  assign trap_enter = !mem_stall &&
-                      (ctrl_mem[`CTRL_ECALL] || ctrl_mem[`CTRL_EBREAK] ||
-                       ctrl_mem[`CTRL_ILLEGAL] || irq_pending);
+  // Forwarding tap from MEM. A CSR instruction's result is the CSR value read
+  // here in MEM, not its EX result (rs1, the write data)
+  assign alu_result_mem = (ctrl_mem[`CTRL_WB_SEL] == WB_CSR) ? csr_rdata : ex_result_mem;
+
+  // Exceptions belong to the instruction in MEM, which does not retire.
+  // Interrupts are taken at the instruction in EX (mepc = pc_ex): it and all
+  // younger instructions are flushed, and the instruction in MEM completes
+  // normally, so nothing runs twice after MRET. An interrupt waits while EX
+  // is a bubble, a MUL/DIV is busy, or MEM holds a CSR instruction (whose
+  // write the trap would otherwise override).
+  wire exc_mem  = valid_mem && (ctrl_mem[`CTRL_ECALL] || ctrl_mem[`CTRL_EBREAK] ||
+                                ctrl_mem[`CTRL_ILLEGAL] || misaligned_mem);
+  wire irq_take = irq_pending && valid_ex && !stall_ex && !ctrl_mem[`CTRL_CSR_EN] && !exc_mem;
+
+  assign trap_enter = !mem_stall && (exc_mem || irq_take);
 
   reg [31:0] trap_cause, trap_val;
   always @(*) begin
@@ -385,8 +506,11 @@ module brv32p_core (
       trap_cause = 32'd11;
     end else if (ctrl_mem[`CTRL_EBREAK]) begin
       trap_cause = 32'd3;
-    end else if (irq_pending) begin
-      trap_cause = {1'b1, 31'd11};
+    end else if (misaligned_mem) begin
+      trap_cause = ctrl_mem[`CTRL_MEM_WR] ? 32'd6 : 32'd4;   // store / load address misaligned
+      trap_val   = ex_result_mem;
+    end else if (irq_take) begin
+      trap_cause = {1'b1, 26'b0, irq_code};
     end
   end
 
@@ -397,6 +521,8 @@ module brv32p_core (
   reg [31:0]         csr_rdata_wb;
   reg [4:0]          rd_addr_wb;
   reg [`CTRL_W-1:0]  ctrl_wb;
+  reg                valid_wb;          // high for exactly one cycle per retired instruction
+  reg [31:0]         pc_wb, raw_wb, mem_addr_wb, mem_wdata_wb;
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -404,11 +530,23 @@ module brv32p_core (
       mem_result_wb <= 32'b0;
       csr_rdata_wb <= 32'b0;
       rd_addr_wb   <= 5'b0;
+      valid_wb     <= 1'b0;
+      pc_wb        <= 32'b0;
+      raw_wb       <= 32'b0;
+      mem_addr_wb  <= 32'b0;
+      mem_wdata_wb <= 32'b0;
     end else if (!mem_stall) begin
       ctrl_wb      <= ctrl_mem;
       mem_result_wb <= mem_result;
       csr_rdata_wb <= csr_rdata;
       rd_addr_wb   <= rd_addr_mem;
+      valid_wb     <= valid_mem && !exc_mem;   // a trapping instruction does not retire
+      pc_wb        <= pc_mem;
+      raw_wb       <= raw_mem;
+      mem_addr_wb  <= ex_result_mem;
+      mem_wdata_wb <= rs2_data_mem;
+    end else begin
+      valid_wb     <= 1'b0;                    // held by a stall: already retired
     end
   end
 
@@ -423,22 +561,33 @@ module brv32p_core (
     endcase
   end
 
-  assign wb_wr_en   = ctrl_wb[`CTRL_REG_WR];
+  assign wb_wr_en   = ctrl_wb[`CTRL_REG_WR] && valid_wb;
   assign wb_rd_addr = rd_addr_wb;
   assign wb_data_fwd = wb_rd_data;  // Forwarding tap
+
+  // Retire trace
+  assign retire_valid     = valid_wb;
+  assign retire_pc        = pc_wb;
+  assign retire_insn      = raw_wb;
+  assign retire_rd_we     = wb_wr_en && (rd_addr_wb != 5'd0);
+  assign retire_rd_addr   = rd_addr_wb;
+  assign retire_rd_wdata  = wb_rd_data;
+  assign retire_mem_we    = valid_wb && ctrl_wb[`CTRL_MEM_WR];
+  assign retire_mem_addr  = mem_addr_wb;
+  assign retire_mem_wdata = mem_wdata_wb;
+  assign retire_mem_width = ctrl_wb[`CTRL_MEM_WIDTH];
 
   // ════════════════════════════════════════════════════════════════════
   // CSR Unit
   // ════════════════════════════════════════════════════════════════════
   wire [31:0] csr_wdata;
-  // ctrl_mem[CTRL_CSR_OP] is bits [19:17]; bit 2 of that = bit 19
-  assign csr_wdata = ctrl_mem[19] ?
-    {27'b0, rd_addr_mem} : ex_result_mem;
+  // CSR write data comes from EX: rs1 for CSRRW/S/C, zimm for CSRRWI/SI/CI
+  assign csr_wdata = ex_result_mem;
 
   csr u_csr (
     .clk           (clk),
     .rst_n         (rst_n),
-    .csr_en        (ctrl_mem[`CTRL_CSR_EN] && !trap_enter && !mem_stall),  // write once; read value is the old one
+    .csr_en        (valid_mem && ctrl_mem[`CTRL_CSR_EN] && !trap_enter && !mem_stall),  // write once; read value is the old one
     .csr_addr      (ctrl_mem[`CTRL_CSR_ADDR]),
     .csr_op        (ctrl_mem[`CTRL_CSR_OP]),
     .csr_wdata     (csr_wdata),
@@ -446,14 +595,15 @@ module brv32p_core (
     .trap_enter    (trap_enter),
     .trap_cause    (trap_cause),
     .trap_val      (trap_val),
-    .trap_pc       (pc_mem),
+    .trap_pc       (exc_mem ? pc_mem : pc_ex),
     .mtvec_out     (mtvec_out),
     .mepc_out      (mepc_out),
     .mret          (mret_ex),
     .ext_irq       (ext_irq),
     .timer_irq     (timer_irq),
-    .instr_retired (ctrl_wb[`CTRL_REG_WR] || ctrl_wb[`CTRL_MEM_WR] || ctrl_wb[`CTRL_ECALL]),
-    .irq_pending   (irq_pending)
+    .instr_retired (valid_wb),
+    .irq_pending   (irq_pending),
+    .irq_code      (irq_code)
   );
 
   // ════════════════════════════════════════════════════════════════════
@@ -472,7 +622,7 @@ module brv32p_core (
     .mem_reg_wr       (ctrl_mem[`CTRL_REG_WR]),
     .wb_rd            (rd_addr_wb),
     .wb_reg_wr        (ctrl_wb[`CTRL_REG_WR]),
-    .branch_mispredict(branch_mispredict_ex || trap_enter || mret_ex),
+    .branch_mispredict(branch_mispredict_ex || trap_enter || mret_ex || fencei_take),
     .jump_ex          (ctrl_ex[`CTRL_JAL] || ctrl_ex[`CTRL_JALR]),
     .trap             (trap_enter),
     .muldiv_busy      (muldiv_busy),

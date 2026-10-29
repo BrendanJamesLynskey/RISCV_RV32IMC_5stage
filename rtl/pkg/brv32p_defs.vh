@@ -109,7 +109,6 @@ localparam [11:0] CSR_MINSTRET = 12'hB02;
 localparam [11:0] CSR_MHARTID  = 12'hF14;
 
 // ── Memory Map ───────────────────────────────────────────────────────
-localparam [31:0] RESET_VECTOR = 32'h0000_0000;
 localparam [31:0] IMEM_BASE    = 32'h0000_0000;
 localparam [31:0] DMEM_BASE    = 32'h1000_0000;
 localparam [31:0] PERIPH_BASE  = 32'h2000_0000;

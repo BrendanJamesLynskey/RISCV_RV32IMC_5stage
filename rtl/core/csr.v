@@ -28,7 +28,8 @@ module csr (
   input  wire        ext_irq,
   input  wire        timer_irq,
   input  wire        instr_retired,
-  output wire        irq_pending
+  output wire        irq_pending,
+  output wire [4:0]  irq_code       // cause of the pending interrupt: 11 (external) or 7 (timer)
 );
 
   `include "brv32p_defs.vh"
@@ -47,6 +48,8 @@ module csr (
     mip[7]  = timer_irq;
   end
   assign irq_pending = mstatus[3] & |(mip & mie);
+  // Priority, as the privileged spec orders them: external before timer
+  assign irq_code    = (mip[11] & mie[11]) ? 5'd11 : 5'd7;
 
   // CSR Read
   always @(*) begin
@@ -67,8 +70,16 @@ module csr (
     endcase
   end
 
-  // Hoisted local variable
+  // New value for a CSR write: CSRRW writes, CSRRS sets bits, CSRRC clears them
   reg [31:0] nv;
+  always @(*) begin
+    case (csr_op[1:0])
+      2'b01:   nv = csr_wdata;
+      2'b10:   nv = csr_rdata | csr_wdata;
+      2'b11:   nv = csr_rdata & ~csr_wdata;
+      default: nv = csr_rdata;
+    endcase
+  end
 
   // CSR Write / Trap
   always @(posedge clk or negedge rst_n) begin
@@ -97,18 +108,12 @@ module csr (
         mstatus[3] <= mstatus[7];
         mstatus[7] <= 1'b1;
       end else if (csr_en) begin
-        case (csr_op[1:0])
-          2'b01: nv = csr_wdata;
-          2'b10: nv = csr_rdata | csr_wdata;
-          2'b11: nv = csr_rdata & ~csr_wdata;
-          default: nv = csr_rdata;
-        endcase
         case (csr_addr)
           CSR_MSTATUS:  mstatus  <= nv & 32'h88;
           CSR_MIE:      mie      <= nv;
           CSR_MTVEC:    mtvec    <= {nv[31:2], 2'b00};
           CSR_MSCRATCH: mscratch <= nv;
-          CSR_MEPC:     mepc     <= {nv[31:2], 2'b00};
+          CSR_MEPC:     mepc     <= {nv[31:1], 1'b0};   // IALIGN = 16 with the C extension
           CSR_MCAUSE:   mcause   <= nv;
           CSR_MTVAL:    mtval    <= nv;
           default: ;

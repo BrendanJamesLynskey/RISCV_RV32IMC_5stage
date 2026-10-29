@@ -2,7 +2,10 @@
 // regfile.v — 32x32 Register File for BRV32P
 // ============================================================================
 // Two read ports (combinational), one write port (synchronous).
-// x0 hardwired to zero. No internal forwarding (handled by hazard unit).
+// x0 hardwired to zero. The read ports bypass a write in the same cycle: an
+// instruction reading in ID while its producer writes back in WB (three
+// instructions apart) must see the new value. Closer producers are forwarded
+// into EX by the hazard unit.
 // ============================================================================
 
 module regfile (
@@ -24,10 +27,14 @@ module regfile (
   reg [31:0] regs [1:31];
 
   // Read port A
-  assign rs1_data = (rs1_addr == 5'd0) ? 32'd0 : regs[rs1_addr];
+  assign rs1_data = (rs1_addr == 5'd0)                  ? 32'd0   :
+                    (wr_en && rd_addr == rs1_addr)      ? rd_data :
+                                                          regs[rs1_addr];
 
   // Read port B
-  assign rs2_data = (rs2_addr == 5'd0) ? 32'd0 : regs[rs2_addr];
+  assign rs2_data = (rs2_addr == 5'd0)                  ? 32'd0   :
+                    (wr_en && rd_addr == rs2_addr)      ? rd_data :
+                                                          regs[rs2_addr];
 
   // Write
   integer i;

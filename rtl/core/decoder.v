@@ -30,7 +30,7 @@ module decoder (
   // ── Immediate generation ─────────────────────────────────────────────
   always @(*) begin
     case (opcode)
-      OP_LOAD, OP_JALR, OP_IMM, OP_SYSTEM:
+      OP_LOAD, OP_JALR, OP_IMM:
         imm = {{20{instr[31]}}, instr[31:20]};
       OP_STORE:
         imm = {{20{instr[31]}}, instr[31:25], instr[11:7]};
@@ -40,6 +40,8 @@ module decoder (
         imm = {instr[31:12], 12'b0};
       OP_JAL:
         imm = {{11{instr[31]}}, instr[31], instr[19:12], instr[20], instr[30:21], 1'b0};
+      OP_SYSTEM:   // CSR write data: zimm (the rs1 field) for CSRR*I, else 0 (rs1 + 0)
+        imm = instr[14] ? {27'b0, instr[19:15]} : 32'b0;
       default:
         imm = 32'b0;
     endcase
@@ -155,6 +157,8 @@ module decoder (
         end else begin
           ctrl[`CTRL_CSR_EN]   = 1'b1;
           ctrl[`CTRL_CSR_OP]   = funct3;
+          ctrl[`CTRL_ALU_SRC]  = 1'b1;   // CSR write data = rs1 + 0, or zimm for CSRR*I
+          ctrl[`CTRL_ALU_OP]   = funct3[2] ? ALU_PASS_B : ALU_ADD;
           ctrl[`CTRL_CSR_ADDR] = instr[31:20];
           ctrl[`CTRL_REG_WR]   = 1'b1;
           ctrl[`CTRL_WB_SEL]   = WB_CSR;

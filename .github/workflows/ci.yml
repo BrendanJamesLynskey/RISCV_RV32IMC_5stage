@@ -43,6 +43,9 @@ jobs:
       - name: Run ISA tests
         run: SPIKE="$HOME/spike/bin/spike" tests/isa/run_isa.sh
 
+      - name: Run DSP benchmarks
+        run: SPIKE="$HOME/spike/bin/spike" tests/bench/run_bench.sh
+
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
@@ -52,6 +55,7 @@ jobs:
             tests/isa/build/results.txt
             tests/isa/build/*.trace
             tests/isa/build/*.spike
+            tests/bench/build/report.txt
 
   soc-testbenches:
     name: SoC testbenches (Verilog and cocotb)

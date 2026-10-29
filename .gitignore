@@ -5,3 +5,6 @@ __pycache__/
 cocotb/firmware.hex
 cocotb/results.xml
 cocotb/sim_build/
+tests/bench/build/
+.Xil/
+/firmware.hex

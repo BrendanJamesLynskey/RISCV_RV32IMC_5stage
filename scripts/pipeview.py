@@ -259,6 +259,61 @@ def read_dis(path):
     return asm
 
 
+def lost_cycles(cycles, occupancy):
+    """Why nothing retired, for each cycle in which nothing did: {cycle: cause}.
+
+    A cycle is lost either because the pipeline was held (a cache miss), or
+    because WB holds a bubble. A bubble is followed back, register by
+    register, to the cycle that made it: a flush (mispredict, trap, MRET,
+    FENCE.I), a load-use bubble, a divide holding EX, or fetch delivering no
+    instruction (the first half of a straddling 32-bit instruction)."""
+    def redirect(c):
+        return ("interrupt" if c.irq_take and not c.exc_mem else "trap") if c.trap_enter else \
+               "mret" if c.mret else "mispredict" if c.mispredict else "fence.i" if c.fencei else "flush"
+
+    def held(c):
+        return "D-cache wait" if c.dmem_stall else "I-cache miss" if c.imem_stall else "stall"
+
+    def origin(stage, k):
+        while True:
+            if k == 0:
+                return "pipeline fill"
+            p = cycles[k - 1]
+            if stage == "ID":
+                if p.flush_id:
+                    return redirect(p)
+                if not p.stall_id and not p.mem_stall:                  # IF/ID loaded
+                    return "I-cache miss" if p.imem_stall else "straddle fetch"
+            elif stage == "EX":
+                if p.flush_ex and not p.mem_stall:
+                    return redirect(p) if p.flush_id else "load-use"
+                if not p.stall_ex and not p.mem_stall:
+                    stage = "ID"
+            elif stage == "MEM":
+                if p.flush_mem:
+                    return redirect(p)
+                if not p.mem_stall:
+                    if p.stall_ex:
+                        return "divide"
+                    stage = "EX"
+            elif stage == "WB":
+                if not p.mem_stall:
+                    if p.exc_mem and occupancy[k - 1]["MEM"] is not None:
+                        return "trap"
+                    stage = "MEM"
+            k -= 1
+
+    out = {}
+    for k, c in enumerate(cycles):
+        if c.valid_wb:
+            continue
+        if k > 0 and cycles[k - 1].mem_stall:
+            out[c.n] = held(cycles[k - 1])
+        else:
+            out[c.n] = origin("WB", k)
+    return out
+
+
 def cmd_check(args):
     cycles = read_pipe(args.pipe)
     try:

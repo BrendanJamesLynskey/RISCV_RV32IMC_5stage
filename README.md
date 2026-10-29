@@ -8,7 +8,7 @@ A synthesisable RV32IMC RISC-V SoC implemented in Verilog-2001. Features a class
 
 | Category | Detail |
 |---|---|
-| **ISA** | RV32IMC — Base Integer, Multiply/Divide, Compressed |
+| **ISA** | RV32IMC — Base Integer, Multiply/Divide, Compressed — plus **Xbrvdsp**, its own DSP extension (multiply-accumulate into a 40-bit accumulator; [doc/dsp_extension.md](doc/dsp_extension.md)) |
 | **Pipeline** | 5-stage (IF / ID / EX / MEM / WB), in-order |
 | **Hazards** | Full data forwarding; load-use stall; flush on misprediction |
 | **Branch prediction** | 2-bit saturating BHT + Branch Target Buffer (BTB) |
@@ -64,11 +64,12 @@ RISCV_RV32IMC_5stage/
 │   │   └── brv32p_defs.vh            # Shared definitions (`include file)
 │   ├── core/
 │   │   ├── brv32p_core.v             # 5-stage pipeline top
-│   │   ├── decoder.v                 # RV32IMC instruction decoder
+│   │   ├── decoder.v                 # RV32IMC (+ Xbrvdsp) instruction decoder
 │   │   ├── compressed_decoder.v      # RV32C → RV32 expander
 │   │   ├── alu.v                     # Arithmetic logic unit
 │   │   ├── regfile.v                 # 32 × 32-bit register file
 │   │   ├── muldiv.v                  # M-extension multiply / divide
+│   │   ├── dsp_unit.v                # Xbrvdsp multiply-accumulate (40-bit accumulator)
 │   │   ├── branch_predictor.v        # 2-bit BHT + BTB
 │   │   ├── hazard_unit.v             # Forwarding and stall logic
 │   │   └── csr.v                     # Machine-mode CSRs
@@ -101,6 +102,7 @@ RISCV_RV32IMC_5stage/
 │   │   └── env/                      # Bare-metal test environment (riscv_test.h, link.ld)
 │   ├── directed/                     # Own tests: FENCE.I, misaligned traps, interrupts
 │   └── bench/                        # DSP benchmarks (C), data generator, cycle report
+├── tools/spike_xbrvdsp/              # Spike model of the DSP extension, for lockstep
 ├── scripts/
 │   ├── lint.sh                       # Verilator -Wall lint
 │   ├── pipeview.py                   # Pipeline trace: check, diagrams, JSON for animation
@@ -108,7 +110,8 @@ RISCV_RV32IMC_5stage/
 ├── .github/workflows/ci.yml          # CI: ISA + lockstep + pipeline trace, testbenches, lint
 ├── doc/
 │   ├── BRV32P_Design_Report.md       # Detailed micro-architecture write-up
-│   └── pipeline_trace.md             # The pipeline trace, its checking, and real diagrams
+│   ├── pipeline_trace.md             # The pipeline trace, its checking, and real diagrams
+│   └── dsp_extension.md              # Xbrvdsp: encodings, semantics, micro-architecture
 └── README.md
 ```
 
@@ -183,6 +186,7 @@ sudo apt install gcc-riscv64-unknown-elf iverilog
 tests/isa/run_isa.sh                     # every suite (riscv-tests is cloned on first use)
 tests/isa/run_isa.sh rv32ui/add rv32uc/rvc
 SPIKE=/path/to/spike tests/isa/run_isa.sh   # also compare each test with Spike
+tools/spike_xbrvdsp/build.sh <spike-src> <spike-build>   # Spike's model of the DSP extension, for its tests
 ```
 
 Each test is assembled with `riscv64-unknown-elf-gcc` and run on the SoC in Icarus. It reports pass or fail by a
@@ -231,6 +235,14 @@ back to the event that made it).
 |---|---|---|---|---|---|
 | `fir` | 16-tap Q15 FIR, 64 outputs, 32-bit accumulator, rounded and saturated | 8,308 | 8.11 per tap | 0.97 | mispredicts at inner-loop exit: 134 cycles |
 | `energy` | Sum of squares of 256 Q15 samples, 64-bit accumulator | 2,591 | 10.12 per sample | 0.99 | I-cache misses: 13 cycles |
+| `fir_mac` | The FIR with Xbrvdsp: `mac` per tap, `acc.rdh` to round and saturate | 7,999 | 7.81 per tap | 0.85 | load-use bubbles, one per tap: 1,024 cycles |
+| `energy_mac` | The energy with `mac`, read back exactly from the 40-bit accumulator | 1,315 | 5.14 per sample | 0.79 | load-use bubbles: 256 cycles |
+| `energy_dmac` | The energy with `dmac`: two samples per instruction from one 32-bit load | 804 | 3.14 per sample | 0.81 | load-use bubbles: 128 cycles |
+
+The extension removes the 64-bit carry chain from the energy kernel (3.2× with `dmac`) and the multiply, add
+and saturation code from the FIR. The FIR gains less (4%) because GCC puts each load directly before the `mac`
+that uses it, costing a load-use bubble per tap; the address generators and packed loads of later steps remove
+both the loads' pointer arithmetic and those bubbles.
 
 These are after the early-straddle fetch change (below). Before it, the same kernels took 9,462 and 3,376 cycles
 (9.24 per tap, 13.19 per sample), and the main loss in both was fetch: a 32-bit instruction that starts in the
@@ -254,13 +266,13 @@ accumulator, post-increment loads and a zero-overhead loop would remove most of 
 |---|---|---|
 | riscv-tests `rv32ui`, `rv32um`, `rv32uc` | Every RV32I, M and C instruction, with bypass and hazard cases | all pass |
 | The same `rv32ui`/`rv32um` sources assembled **with C** | Mixed 16/32-bit code: 32-bit instructions straddling words, branches sharing a word | all pass |
-| Directed (`tests/directed`) | FENCE.I on cached code, and in the cycle an I-cache fill completes; misaligned-access traps; timer interrupts (cause, and nothing lost or run twice) | all pass |
-| Lockstep with Spike | Every ISA and directed test except `timer_irq` (Spike has no timer), compared instruction by instruction | all match |
+| Directed (`tests/directed`) | The DSP extension (every instruction, rounding, saturation, 40-bit wrap and readback; a MAC interrupted in EX leaves the accumulator untouched); FENCE.I on cached code, and in the cycle an I-cache fill completes; misaligned-access traps; timer interrupts (cause, and nothing lost or run twice) | all pass |
+| Lockstep with Spike | Every ISA and directed test except `timer_irq` and `dsp_irq` (Spike has no timer; both check themselves), compared instruction by instruction; tests of the DSP extension use its Spike model (`tools/spike_xbrvdsp`) | all match |
 | Pipeline trace | Every ISA and directed test: the rebuilt pipeline matches the RTL's stage registers every cycle, and its retirements match the retire trace | all check |
 | SoC testbench + cocotb | Directed SoC program: GPIO, UART byte, caches, predictor training, ECALL | 30/30, 14/14 |
 | Verilator lint | `-Wall`, with four documented waivers | clean |
 
-That is 102 applicable ISA tests. Three upstream tests are listed as not applicable, with reasons in
+That is 104 applicable ISA tests. Three upstream tests are listed as not applicable, with reasons in
 `run_isa.sh`: `ma_data` twice (needs hardware misaligned access; this core traps, as the spec allows) and
 `fence_i` assembled with C (it overwrites compressed code). Spike behaves identically on all three. The directed
 tests were checked against mutants of the RTL with the behaviour removed, and each mutant fails.
@@ -384,15 +396,19 @@ Artix-7 on a Digilent Nexys A7-100T; 100 MHz target. Whole SoC, with the 32 KB S
 
 | Resource | Used | Available | |
 |---|---|---|---|
-| LUTs | 8,030 | 63,400 | 12.7% (1,456 of them as LUT RAM: the cache arrays) |
-| Registers | 7,324 | 126,800 | 5.8% |
+| LUTs | 8,476 | 63,400 | 13.4% (the cache arrays are LUT RAM; the DSP unit is 349) |
+| Registers | 7,458 | 126,800 | 5.9% |
 | Block RAM (36 Kb) | 8 | 135 | the 32 KB SRAM |
-| DSP48 | 12 | 240 | the 32×32 multiplier |
-| **Fmax** | **62.3 MHz** | | WNS −6.05 ns at 10 ns |
+| DSP48 | 15 | 240 | 12 for the 32×32 multiplier, 3 for the DSP unit's two 16×16 multipliers |
+| **Fmax** | **58.8 MHz** | | WNS −7.0 ns at 10 ns |
 
-**Critical path** (17 logic levels, 15.9 ns, 70% routing): the next-PC loop, from `pc_if` through the I-cache
-LUT-RAM read, the RV32C alignment and the next-PC selection, back into `pc_if`. Fetching, aligning and predicting
-in one cycle is what limits the clock. Splitting fetch into two stages is the obvious next step.
+**Critical path** (16 logic levels, 16.9 ns, 49% routing): from the EX operand registers through forwarding
+into the single-cycle 32×32 multiplier (two DSP48 cascades and the carry chain of the final add), into the EX/MEM
+result register. The next-PC loop used to be the limit (62.3 MHz); the multiplier overtook it as the core
+grew. Splitting the multiply over two stages (the carry-save tree in EX, the final add in MEM) is the next step.
+
+Fmax over the changes on the way: 61.6 MHz before the early straddle, 58.4 MHz after it, 58.8 MHz with the DSP
+unit. The DSP unit cost 390 LUTs and 3 DSP48s and did not move the critical path.
 
 **What changed to get here.** An earlier run built every memory from flip-flops (about 43k LUTs and 78k
 registers; it did not fit an Artix-7 35T). Two coding changes fixed it:

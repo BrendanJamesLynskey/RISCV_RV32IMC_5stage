@@ -17,7 +17,10 @@ import pipeview  # noqa: E402
 
 # Kernels: (begin marker, name, work units, unit)
 KERNELS = [(0, "fir, cold caches", 64 * 16, "tap"), (2, "fir", 64 * 16, "tap"),
-           (4, "energy, cold caches", 256, "sample"), (6, "energy", 256, "sample")]
+           (4, "energy, cold caches", 256, "sample"), (6, "energy", 256, "sample"),
+           (8, "fir_mac, cold caches", 64 * 16, "tap"), (10, "fir_mac", 64 * 16, "tap"),
+           (12, "energy_mac, cold", 256, "sample"), (14, "energy_mac", 256, "sample"),
+           (16, "energy_dmac, cold", 256, "sample"), (18, "energy_dmac", 256, "sample")]
 
 
 def marker(raw):

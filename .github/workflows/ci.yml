@@ -26,7 +26,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/spike
-          key: spike-${{ env.SPIKE_REV }}-ubuntu-24.04
+          key: spike-${{ env.SPIKE_REV }}-ubuntu-24.04-with-headers
 
       - name: Build Spike
         if: steps.spike-cache.outputs.cache-hit != 'true'
@@ -39,6 +39,14 @@ jobs:
           ../configure --prefix="$HOME/spike" --with-boost=no
           make -j"$(nproc)"
           make install
+          # Keep the source and generated headers: the DSP extension's Spike
+          # model compiles against them (tools/spike_xbrvdsp/build.sh)
+          mkdir -p "$HOME/spike/src/build"
+          cp -rL ../riscv ../fesvr ../softfloat ../fdt "$HOME/spike/src/"   # -L: softfloat links into its submodule
+          cp config.h insn_list.h "$HOME/spike/src/build/"
+
+      - name: Build the Spike model of the DSP extension
+        run: tools/spike_xbrvdsp/build.sh "$HOME/spike/src" "$HOME/spike/src/build"
 
       - name: Run ISA tests
         run: SPIKE="$HOME/spike/bin/spike" tests/isa/run_isa.sh

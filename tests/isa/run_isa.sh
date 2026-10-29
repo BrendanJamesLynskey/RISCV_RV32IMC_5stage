@@ -44,7 +44,7 @@ declare -A SRC=( [rv32ui]="$RISCV_TESTS/isa/rv32ui" [rv32um]="$RISCV_TESTS/isa/r
 SUITES=(rv32ui rv32um rv32uc rv32ui-c rv32um-c directed)
 
 # Tests that use the SoC's own peripherals, which Spike does not model
-NO_LOCKSTEP=" directed/timer_irq "
+NO_LOCKSTEP=" directed/timer_irq directed/dsp_irq "
 
 # Upstream tests that do not apply to this core, skipped in a full run (name a
 # test explicitly to run it anyway). In each case Spike, configured like the
@@ -59,6 +59,11 @@ SPIKE="${SPIKE:-$(command -v spike || true)}"
 LOCKSTEP="${LOCKSTEP:-1}"
 PIPE="${PIPE:-1}"
 [ -x "$SPIKE" ] || LOCKSTEP=0
+
+# Tests of Xbrvdsp, the custom DSP extension (directed/dsp_*), need Spike's
+# model of it: tools/spike_xbrvdsp/build.sh builds libxbrvdsp.so. Without it,
+# they still run on the core, but their lockstep check fails.
+XBRVDSP_LIB="${XBRVDSP_LIB:-$ROOT/tools/spike_xbrvdsp/build/libxbrvdsp.so}"
 
 tests=("$@")
 skipped=()
@@ -98,7 +103,9 @@ for t in "${tests[@]}"; do
   fi
   ls_note=""
   if [ "$LOCKSTEP" = 1 ] && [[ "$NO_LOCKSTEP" != *" $t "* ]]; then
-    timeout 120 "$SPIKE" --isa="${MARCH[$suite]}" -m0x80000000:0x8000 --log-commits "$out.elf" 2> "$out.spike" || true
+    spike_ext=()
+    case "$t" in directed/dsp_*) spike_ext=(--extlib="$XBRVDSP_LIB" --extension=xbrvdsp) ;; esac
+    timeout 120 "$SPIKE" --isa="${MARCH[$suite]}" "${spike_ext[@]}" -m0x80000000:0x8000 --log-commits "$out.elf" 2> "$out.spike" || true
     ls_out=$(python3 "$HERE/lockstep.py" "$out.trace" "$out.spike" | tail -n 1) || ls_out="FAIL $ls_out"
     ls_note="  [lockstep: $ls_out]"
     case "$ls_out" in MATCH*) ;; *) result="RESULT FAIL lockstep" ;; esac

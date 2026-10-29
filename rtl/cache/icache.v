@@ -13,7 +13,7 @@ module icache #(
   // CPU interface
   input  wire [31:0] addr,
   input  wire        rd_en,
-  input  wire        invalidate,   // FENCE.I: drop every line (taken when idle)
+  input  wire        invalidate,   // FENCE.I: drop every line (taken when not filling)
   output reg  [31:0] rdata,
   output reg         ready,
 
@@ -133,6 +133,12 @@ module icache #(
         end
 
         S_DONE: begin
+          // The core can take a FENCE.I in the cycle the filled word is
+          // delivered; drop every line then too, or the invalidate is lost
+          if (invalidate)
+            for (s = 0; s < SETS; s = s + 1)
+              for (w = 0; w < WAYS; w = w + 1)
+                valid_mem[s][w] <= 1'b0;
           state <= S_IDLE;
         end
 

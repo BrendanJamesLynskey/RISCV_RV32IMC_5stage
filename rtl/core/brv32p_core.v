@@ -175,6 +175,7 @@ module brv32p_core #(
   reg [31:0] pc_id, instr_id;
   reg [31:0] pc_inc_id;
   reg        pred_taken_id;
+  reg [31:0] pred_target_id;    // where fetch went next if pred_taken_id
   reg        illegal_c_id;
   reg        valid_id;                  // stage holds a real instruction, not a bubble
   reg [31:0] raw_id;                    // original encoding, for the retire trace
@@ -185,6 +186,7 @@ module brv32p_core #(
       instr_id      <= 32'h0000_0013; // NOP
       pc_inc_id     <= 32'd4;
       pred_taken_id <= 1'b0;
+      pred_target_id <= 32'b0;
       illegal_c_id  <= 1'b0;
       valid_id      <= 1'b0;
       raw_id        <= 32'b0;
@@ -193,6 +195,7 @@ module brv32p_core #(
       instr_id      <= fetch_valid ? instr_expanded_if : 32'h0000_0013;  // NOP while a straddle completes
       pc_inc_id     <= pc_inc;
       pred_taken_id <= bp_pred_taken && bp_pred_valid && fetch_valid;
+      pred_target_id <= bp_pred_target;
       illegal_c_id  <= illegal_c_if && fetch_valid;
       valid_id      <= fetch_valid;
       raw_id        <= instr_raw_if;
@@ -241,6 +244,7 @@ module brv32p_core #(
   reg [4:0]          rs1_addr_ex, rs2_addr_ex, rd_addr_ex;
   reg [`CTRL_W-1:0]  ctrl_ex;
   reg                pred_taken_ex;
+  reg [31:0]         pred_target_ex;
   reg                valid_ex;
   reg [31:0]         raw_ex;
 
@@ -272,6 +276,7 @@ module brv32p_core #(
       rs2_addr_ex   <= 5'b0;
       rd_addr_ex    <= 5'b0;
       pred_taken_ex <= 1'b0;
+      pred_target_ex <= 32'b0;
     end else if (!stall_ex && !mem_stall) begin
       ctrl_ex       <= ctrl_id_eff;
       pc_ex         <= pc_id;
@@ -283,6 +288,7 @@ module brv32p_core #(
       rs2_addr_ex   <= rs2_addr_id;
       rd_addr_ex    <= rd_addr_id;
       pred_taken_ex <= pred_taken_id;
+      pred_target_ex <= pred_target_id;
       valid_ex      <= valid_id;
       raw_ex        <= raw_id;
     end
@@ -378,12 +384,14 @@ module brv32p_core #(
   // when the pipeline advances. During a memory stall the EX and MEM
   // instructions are held, so acting early would flush the branch or jump
   // itself while its redirect is lost (the PC does not load while stalled).
-  // A taken prediction for an instruction that is not a branch or jump (a
-  // BTB alias, or a stale entry) is also a mispredict: fall through to pc+len.
+  // A mispredict is a wrong direction, or taken to the wrong place (the
+  // target fetch followed, pred_target_ex, differs from the real one). A taken
+  // prediction for an instruction that is not a branch or jump (a BTB alias,
+  // or a stale entry) is also a mispredict: fall through to pc+len.
   assign branch_mispredict_ex = !mem_stall && valid_ex &&
     ((is_branch_or_jump &&
       ((actual_taken != pred_taken_ex) ||
-       (actual_taken && (branch_target_computed != pc_ex + pc_inc_ex)))) ||
+       (actual_taken && (branch_target_computed != pred_target_ex)))) ||
      (!is_branch_or_jump && pred_taken_ex));
 
   assign branch_target_ex = actual_taken ? branch_target_computed :

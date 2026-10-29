@@ -249,6 +249,7 @@ hiding failures.
 | Illegal compressed instructions | 0x0000 executed | `illegal_c` computed but never used |
 | Interrupt cause | Timer interrupts reported as external | mcause hard-wired to 11 |
 | Interrupt precision, `minstret` | An interrupted instruction could run twice; `minstret` counted wrongly | No per-stage valid bits; fixed with valid bits and a retire port |
+| Branch prediction never helped a taken branch | A 2-instruction loop took 4 cycles per iteration | The mispredict check compared a taken branch's target with pc + 4, not with the predicted target, so every correctly predicted taken branch was flushed. Fixed: loops run at 1 IPC; the timer test needs 27% fewer cycles |
 
 The test harness had bugs of its own, also fixed:
 - image paths over 128 characters were truncated, and the run continued on an all-NOP memory;

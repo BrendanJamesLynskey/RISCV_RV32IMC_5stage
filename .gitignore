@@ -2,3 +2,6 @@ tests/isa/build/
 tests/isa/riscv-tests/
 build/
 __pycache__/
+cocotb/firmware.hex
+cocotb/results.xml
+cocotb/sim_build/

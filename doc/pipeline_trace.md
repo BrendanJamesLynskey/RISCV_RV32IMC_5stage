@@ -236,10 +236,13 @@ its value is forwarded to `mv` in EX):
 {
   "format": "brv32p-pipeview-1",
   "insns":  [ ... {"id": 99, "pc": "8000019c", "raw": "0046a703", "asm": "lw a4,4(a3)", "fate": "retired", "end": 467, "cause": null, "stages": [["ID", 464], ["EX", 465], ["MEM", 466], ["WB", 467]]} ... ],
-  "cycles": [ ... {"n": 467, "stages": {"IF": 102, "ID": 101, "EX": 100, "MEM": null, "WB": 99}, "events": ["forward"], "retire": true, "fwd": {"rs1": [14, "WB"], "rs2": [0, null]}, "write": [14, "0ff00ff0"]} ... ]
+  "cycles": [ ... {"n": 467, "stages": {"IF": 102, "ID": 101, "EX": 100, "MEM": null, "WB": 99}, "events": ["forward"], "retire": true, "fetch": {"pc": "800001a8", "valid": true, "straddle": false, "predict_taken": false}, "fwd": {"rs1": [14, "WB"], "rs2": [0, null]}, "write": [14, "0ff00ff0"]} ... ]
 }
 ```
 
 `stages` maps each stage to the instruction id it holds that cycle (`null` is
 a bubble); `fwd` gives the forwarded source registers and where each value
-came from; `write` is the register written as an instruction retires.
+came from; `write` is the register written as an instruction retires; `fetch`
+gives the fetch pc, whether a complete instruction was fetched (false on the
+first cycle of a 32-bit instruction that straddles two words), and whether the
+predictor said taken.

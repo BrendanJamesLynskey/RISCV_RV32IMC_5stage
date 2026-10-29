@@ -365,7 +365,9 @@ def cmd_json(args):
             continue
         rec = {"n": c.n, "stages": {s: (occ[s].uid if occ[s] is not None and occ[s].uid in ids else None)
                                     for s in STAGES},
-               "events": c.events(), "retire": bool(c.valid_wb)}
+               "events": c.events(), "retire": bool(c.valid_wb),
+               "fetch": {"pc": f"{c.pc_if:08x}", "valid": bool(c.fetch_valid),
+                         "straddle": bool(c.straddle), "predict_taken": bool(c.pred)}}
         if c.fwd_rs1 or c.fwd_rs2:
             rec["fwd"] = {"rs1": [c.rs1_ex, FWD[c.fwd_rs1]], "rs2": [c.rs2_ex, FWD[c.fwd_rs2]]}
         if c.valid_wb and c.rd_we and c.rd_wb:

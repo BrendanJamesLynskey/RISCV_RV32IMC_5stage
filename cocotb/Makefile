@@ -7,6 +7,7 @@ VERILOG_SOURCES = \
     $(PWD)/../rtl/core/branch_predictor.v \
     $(PWD)/../rtl/core/hazard_unit.v \
     $(PWD)/../rtl/core/muldiv.v \
+    $(PWD)/../rtl/core/dsp_unit.v \
     $(PWD)/../rtl/core/csr.v \
     $(PWD)/../rtl/core/brv32p_core.v \
     $(PWD)/../rtl/cache/icache.v \

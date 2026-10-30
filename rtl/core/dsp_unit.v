@@ -11,7 +11,11 @@
 //               sext(acc[39:32]). With acc.set and acc.seth they give exact
 //               readback and save/restore of all 40 bits.
 //   funct3 100: sadd rd, rs1, rs2 (funct7 0) = sat32(rs1 + rs2);
-//               ssub (funct7 1) = sat32(rs1 - rs2). They do not use acc.
+//               ssub (funct7 1) = sat32(rs1 - rs2);
+//               radd16 (funct7 2) = per 16-bit half, (rs1 + rs2) >> 1;
+//               rsub16 (funct7 3) = per half, (rs1 - rs2) >> 1 (signed,
+//               rounding down: exact, never overflows);
+//               pk16 (funct7 4) = {rs1[15:0], rs2[15:0]}. They do not use acc.
 // round is 2^(sh-1), or 0 when sh is 0. a and b are the forwarded rs1 and
 // rs2; sh is the rs2 field.
 //
@@ -74,9 +78,17 @@ module dsp_unit (
   wire [31:0] s_sat = (s_sum[32] != s_sum[31]) ? (s_sum[32] ? 32'h8000_0000 : 32'h7FFF_FFFF)
                                                : s_sum[31:0];
 
+  // Packed halves: 17-bit sum or difference of each signed half, halved
+  wire signed [16:0] h_lo = funct7[0] ? ($signed({a[15], a[15:0]})  - $signed({b[15], b[15:0]}))
+                                      : ($signed({a[15], a[15:0]})  + $signed({b[15], b[15:0]}));
+  wire signed [16:0] h_hi = funct7[0] ? ($signed({a[31], a[31:16]}) - $signed({b[31], b[31:16]}))
+                                      : ($signed({a[31], a[31:16]}) + $signed({b[31], b[31:16]}));
+
   always @(*) begin
     if (funct3 == 3'b100)
-      result = s_sat;
+      result = funct7[2] ? {a[15:0], b[15:0]} :            // pk16
+               funct7[1] ? {h_hi[16:1], h_lo[16:1]} :     // radd16, rsub16
+                           s_sat;                          // sadd, ssub
     else if (funct3 == 3'b011)
       result = funct7[0] ? {{24{acc[39]}}, acc[39:32]} : acc[31:0];
     else if (funct3 == 3'b010)

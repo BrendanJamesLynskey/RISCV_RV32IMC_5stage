@@ -14,6 +14,7 @@ project's own.
 | 4 | Hardware loop: the loop-back folded into the body's last instruction (`dmac.lp`, `lp.end`) | **done** |
 | 5a | Saturating add and subtract; biquad IIR and saturating-mix benchmarks | **done** |
 | 5b | Bit-reversed addressing; radix-2 FFT benchmark | **done** |
+| 5c | Packed halving add and subtract, and a pack, for 16-bit pairs (FFT butterflies) | **done** |
 
 ## Step 1: the multiply-accumulate unit
 
@@ -348,3 +349,34 @@ loads of operands and twiddles, two `acc.set`, two `dmac`, two `acc.rdh`). About
 subtract, halve and repack. The next instructions worth adding are packed halving adds and subtracts on two
 16-bit halves (as in the RISC-V P extension's `radd16`/`rsub16`): then a butterfly's outputs are one
 instruction each.
+
+## Step 5c: packed halves
+
+| Instruction | funct7 | funct3 | Operation |
+|---|---|---|---|
+| `radd16 rd, rs1, rs2` | 0000010 | 100 | each 16-bit half: (rs1 + rs2) >> 1 |
+| `rsub16 rd, rs1, rs2` | 0000011 | 100 | each half: (rs1 − rs2) >> 1 |
+| `pk16 rd, rs1, rs2` | 0000100 | 100 | rd = {rs1[15:0], rs2[15:0]} |
+
+These are custom-0, R-type, in `dsp_unit.v`. They do not touch `acc`. The halves are signed. Each sum is formed in
+17 bits and then shifted right arithmetically, so it rounds down and never overflows. They are this extension's
+equivalents of the RISC-V P extension's `radd16`, `rsub16` and `pkbb16`.
+
+An FFT butterfly's outputs are (a + t)/2 and (a − t)/2 on both the real and imaginary halves. So once t is
+packed (`pk16` of the two `acc.rdh` results), each output is one instruction. Before, each output took about ten:
+unpacking, adding, halving, masking and repacking.
+
+`tests/directed/dsp_mac.S` cases 15–17 cover:
+- both halves with mixed signs;
+- rounding down of a negative odd sum;
+- the extremes 0x7fff + 0x7fff and 0x8000 + 0x8000;
+- −32768 − 32767, which needs the 17th bit;
+- `pk16`, and its result forwarded into `radd16`.
+
+| FFT part (warm caches) | Plain C | `dmac` (5b) | `dmac` + packed halves (5c) |
+|---|---|---|---|
+| butterflies, cycles each | 54.9 | 42.5 | **27.5** |
+| whole FFT, with the bit-reversed copy | 11,713 | 8,588 | **5,707** (2.05×) |
+
+These are from one build, so the three columns share a data layout. The step 5b table above was measured
+before the layout changed, and its copy times differ by the D-cache conflicts.

@@ -63,7 +63,7 @@ module tb_isa;
       $fwrite(pipe_fd, " | valid_mem pc_mem raw_mem rd_mem dmem_rd dmem_wr dmem_stall");
       $fwrite(pipe_fd, " | valid_wb pc_wb raw_wb rd_we rd_wb rd_data");
       $fwrite(pipe_fd, " | stall_if stall_id stall_ex flush_id flush_ex flush_mem mem_stall");
-      $fwrite(pipe_fd, " load_use muldiv_busy mispredict trap_enter exc_mem irq_take mret fencei trap_cause mul_use\n");
+      $fwrite(pipe_fd, " load_use muldiv_busy mispredict trap_enter exc_mem irq_take mret fencei trap_cause mul_use csr_use\n");
     end
 
     // $readmemh only warns if the file is missing, which would leave the
@@ -121,12 +121,12 @@ module tb_isa;
             `CORE.dmem_rd, `CORE.dmem_wr, `CORE.dmem_stall);
     $fwrite(pipe_fd, " | %0d %08h %08h %0d %0d %08h",
             `CORE.valid_wb, `CORE.pc_wb, `CORE.raw_wb, `CORE.wb_wr_en, `CORE.rd_addr_wb, `CORE.wb_rd_data);
-    $fwrite(pipe_fd, " | %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %08h %0d\n",
+    $fwrite(pipe_fd, " | %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %08h %0d %0d\n",
             `CORE.stall_if, `CORE.stall_id, `CORE.stall_ex,
             `CORE.flush_id, `CORE.flush_ex, `CORE.flush_mem, `CORE.mem_stall,
             `CORE.u_hazard.load_use_hazard, `CORE.muldiv_busy, `CORE.branch_mispredict_ex,
             `CORE.trap_enter, `CORE.exc_mem, `CORE.irq_take, `CORE.mret_ex, `CORE.fencei_take,
-            `CORE.trap_cause, `CORE.u_hazard.mul_use_hazard);
+            `CORE.trap_cause, `CORE.u_hazard.mul_use_hazard, `CORE.u_hazard.csr_use_hazard);
   end
 
   initial begin

@@ -581,9 +581,12 @@ module brv32p_core #(
   wire [4:0]  irq_code;
   wire [31:0] csr_rdata;
 
-  // Forwarding tap from MEM. A CSR instruction's result is the CSR value read
-  // here in MEM, not its EX result (rs1, the write data)
-  assign alu_result_mem = (ctrl_mem[`CTRL_WB_SEL] == WB_CSR) ? csr_rdata : ex_result_mem;
+  // Forwarding tap from MEM. A CSR instruction's result (the CSR value read
+  // here in MEM) is not forwarded from MEM: the hazard unit holds a dependent
+  // instruction for a cycle and it takes the value from WB. Forwarding it from
+  // here put the CSR read mux, and mip straight from the peripherals, on a
+  // critical path into EX.
+  assign alu_result_mem = ex_result_mem;
 
   // Exceptions belong to the instruction in MEM, which does not retire.
   // Interrupts are taken at the instruction in EX (mepc = pc_ex): it and all
@@ -719,6 +722,7 @@ module brv32p_core #(
     .ex_reg_wr        (ctrl_ex[`CTRL_REG_WR]),
     .ex_mem_rd        (ctrl_ex[`CTRL_MEM_RD]),
     .ex_mul           (mul_ex),
+    .ex_csr           (ctrl_ex[`CTRL_CSR_EN] && ctrl_ex[`CTRL_REG_WR]),
     .ex_wb_sel        (ctrl_ex[`CTRL_WB_SEL]),
     .mem_rd           (rd_addr_mem),
     .mem_reg_wr       (ctrl_mem[`CTRL_REG_WR]),

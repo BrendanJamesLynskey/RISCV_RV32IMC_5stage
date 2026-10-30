@@ -16,6 +16,7 @@ module hazard_unit (
   input  wire        ex_reg_wr,
   input  wire        ex_mem_rd,     // Load in EX -> stall
   input  wire        ex_mul,        // Multiply in EX: its result is ready after MEM
+  input  wire        ex_csr,        // CSR instruction in EX: its result is read in MEM
   input  wire [2:0]  ex_wb_sel,
 
   // MEM stage info
@@ -60,6 +61,12 @@ module hazard_unit (
   assign mul_use_hazard = ex_mul && (ex_rd != 5'd0) &&
                           ((ex_rd == id_rs1) || (ex_rd == id_rs2));
 
+  // ── CSR-use hazard: a CSR is read in MEM; its value reaches EX from WB,
+  //    one cycle later, so the CSR read stays off the forwarding path ────
+  wire csr_use_hazard;
+  assign csr_use_hazard = ex_csr && (ex_rd != 5'd0) &&
+                          ((ex_rd == id_rs1) || (ex_rd == id_rs2));
+
   // ── Data forwarding (based on EX stage addresses) ──────────────────
   always @(*) begin
     // RS1 forwarding
@@ -94,8 +101,8 @@ module hazard_unit (
       stall_id = 1'b1;
       stall_ex = 1'b1;
     end
-    // Load-use or mul-use: stall IF and ID, insert bubble in EX
-    else if (load_use_hazard || mul_use_hazard) begin
+    // Load-use, mul-use or csr-use: stall IF and ID, insert bubble in EX
+    else if (load_use_hazard || mul_use_hazard || csr_use_hazard) begin
       stall_if = 1'b1;
       stall_id = 1'b1;
       flush_ex = 1'b1;   // Bubble

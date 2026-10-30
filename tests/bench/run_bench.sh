@@ -26,11 +26,11 @@ LOCKSTEP="${LOCKSTEP:-1}"
 
 python3 "$HERE/gen_data.py" > "$B/bench_data.h"
 CFLAGS=(-O2 -falign-loops=4 -mabi=ilp32 -mcmodel=medany -ffreestanding -I "$B" -I "$HERE")
-for f in sha256_zk aes_zk crc32_zk gf2_zk gf256_x; do
+for f in sha256_zk aes_zk crc32_zk gf2_zk gf256_x mlkem_x; do
   "${CROSS}gcc" "${CFLAGS[@]}" -march="$MARCH_ZK" -c "$HERE/$f.c" -o "$B/$f.o"
 done
 "${CROSS}gcc" "${CFLAGS[@]}" -march="$MARCH" -static -nostdlib -nostartfiles -T "$HERE/link.ld" \
-  "$HERE/crt.S" "$HERE/dsp.c" "$HERE/sha256.c" "$HERE/aes.c" "$HERE/crc32.c" "$HERE/gf2.c" "$HERE/gf256.c" "$B/sha256_zk.o" "$B/aes_zk.o" "$B/crc32_zk.o" "$B/gf2_zk.o" "$B/gf256_x.o" \
+  "$HERE/crt.S" "$HERE/dsp.c" "$HERE/sha256.c" "$HERE/aes.c" "$HERE/crc32.c" "$HERE/gf2.c" "$HERE/gf256.c" "$HERE/mlkem.c" "$B/sha256_zk.o" "$B/aes_zk.o" "$B/crc32_zk.o" "$B/gf2_zk.o" "$B/gf256_x.o" "$B/mlkem_x.o" \
   -o "$B/dsp.elf"
 "${CROSS}objcopy" -O binary "$B/dsp.elf" "$B/dsp.bin"
 python3 "$ROOT/tests/isa/elf2hex.py" "$B/dsp.bin" "$B/dsp.hex"

@@ -60,7 +60,7 @@ LOCKSTEP="${LOCKSTEP:-1}"
 PIPE="${PIPE:-1}"
 [ -x "$SPIKE" ] || LOCKSTEP=0
 
-# Tests that use Xbrvdsp, the custom DSP extension (directed/dsp_*, directed/gf
+# Tests that use Xbrvdsp, the custom DSP extension (directed/dsp_*, directed/gf, directed/mq
 # and directed/mul_use), need Spike's model of it: tools/spike_xbrvdsp/build.sh
 # builds libxbrvdsp.so. Without it, they still run on the core, but their
 # lockstep check fails.
@@ -105,7 +105,7 @@ for t in "${tests[@]}"; do
   ls_note=""
   if [ "$LOCKSTEP" = 1 ] && [[ "$NO_LOCKSTEP" != *" $t "* ]]; then
     spike_ext=()
-    case "$t" in directed/dsp_*|directed/mul_use|directed/gf) spike_ext=(--extlib="$XBRVDSP_LIB" --extension=xbrvdsp) ;; esac
+    case "$t" in directed/dsp_*|directed/mul_use|directed/gf|directed/mq) spike_ext=(--extlib="$XBRVDSP_LIB" --extension=xbrvdsp) ;; esac
     timeout 120 "$SPIKE" --isa="${MARCH[$suite]}" "${spike_ext[@]}" -m0x80000000:0x8000 --log-commits "$out.elf" 2> "$out.spike" || true
     ls_out=$(python3 "$HERE/lockstep.py" "$out.trace" "$out.spike" | tail -n 1) || ls_out="FAIL $ls_out"
     ls_note="  [lockstep: $ls_out]"

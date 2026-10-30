@@ -47,8 +47,20 @@ gf256:  GF(2^8) (gf256.c, gf256_x.c). Reed-Solomon RS(255,223) over
         A second received word (all-zero message, 16 other errors) for the
         timing comparison. The exp/log tables. And AES InvMixColumns of 256
         bytes, by FIPS-197's matrix.
+mlkem:  ML-KEM's ring Z_q[X]/(X^256 + 1), q = 3329 (mlkem.c, mlkem_x.c),
+        from the model in mlkem.py, which is checked against NIST's ACVP
+        vectors and C2SP CCTV's accumulated test (all by running mlkem.py;
+        here, the first 100 CCTV tests, against recorded hashes). Two random polynomials a and b; NTT(a), NTT(b);
+        the inverse NTT of NTT(a) as pq-crystals' invntt leaves it (times
+        R = 2^16, the Montgomery factor); MultiplyNTTs(NTT(a), NTT(b)) as
+        its basemul leaves it (times R^-1); and a * b, by schoolbook
+        multiplication, which NTT^-1(MultiplyNTTs(NTT(a), NTT(b))) must
+        equal. The tables: pq-crystals' zetas (Montgomery form, signed), and
+        the extension's (Montgomery form, in [0, q)): zeta^BitRev7(k) for
+        the NTTs, gamma = zeta^(2 BitRev7(i) + 1) for basemul.
 """
 import hashlib
+import mlkem
 import zlib
 import math
 
@@ -262,6 +274,12 @@ def gf_mul(a, b, poly):
             r ^= a
     return r
 
+
+# The first 100 of CCTV's accumulated ML-KEM-768 tests, in the draft form
+# CCTV's hashes use and in FIPS 203's final form (mlkem.py), recorded after
+# the model matched CCTV's hash of all 10,000 and passed NIST's ACVP vectors
+MLKEM_CCTV_100 = {True: "8d0c478ead6037897a0da6be21e5399545babf5fc6dd10c061c99b7dee2bf0dc",
+                  False: "8d65b902f28edc683cebee2872962fd165a4d197c9e24ec74caa4470270df0b7"}
 
 RS_POLY, RS_NSYM = 0x1D, 32
 RS_EXP = [0] * 510
@@ -547,6 +565,29 @@ def main():
         return out
     assert invmix([0x8e, 0x4d, 0xa1, 0xbc]) == [0xdb, 0x13, 0x53, 0x45], "InvMixColumns model fails"
     print(arr("aes_invmix_expect", "uint8_t", invmix(list(apt))))
+
+    for draft, h in MLKEM_CCTV_100.items():
+        assert mlkem.accumulated(100, 768, draft) == h, "the ML-KEM model fails the CCTV vectors"
+    q, R = mlkem.Q, 1 << 16
+    gk = lcg(53)
+    ka = [next(gk) % q for _ in range(256)]
+    kb = [next(gk) % q for _ in range(256)]
+    ah, bh = mlkem.ntt(ka), mlkem.ntt(kb)
+    prod = mlkem.schoolbook(ka, kb)
+    assert mlkem.intt(mlkem.multiply_ntts(ah, bh)) == prod, "NTT multiplication differs from schoolbook"
+
+    def centred(v):
+        return v - q if v > q // 2 else v
+    rinv = pow(R, -1, q)
+    print(f"#define MLKEM_Q {q}\n#define MLKEM_QCFG 0x{(-pow(q, -1, R)) % R:04x}{q:04x}u\n")
+    print(arr("mlkem_zetas_ref", "int16_t", [centred(z * R % q) for z in mlkem.ZETAS]))
+    print(arr("mlkem_zetas", "uint16_t", [z * R % q for z in mlkem.ZETAS]))
+    print(arr("mlkem_gammas", "uint16_t", [g * R % q for g in mlkem.GAMMAS]))
+    for name, v in (("mlkem_a", ka), ("mlkem_b", kb), ("mlkem_ntt_a", ah), ("mlkem_ntt_b", bh),
+                    ("mlkem_invntt_expect", [x * R % q for x in ka]),
+                    ("mlkem_basemul_expect", [x * rinv % q for x in mlkem.multiply_ntts(ah, bh)]),
+                    ("mlkem_mul_expect", prod)):
+        print(arr(name, "uint16_t __attribute__((aligned(4)))", v))
 
 
 if __name__ == "__main__":

@@ -41,7 +41,15 @@ def data(field):
 
 
 class Cycle:
-    """One line of the pipe file."""
+    """One line of the pipe file. Slots, not a dict: a benchmark's trace has
+    millions of cycles."""
+    __slots__ = ("n", "pc_if", "fetch_valid", "straddle", "imem_stall", "pred",
+                 "valid_id", "pc_id", "raw_id", "valid_ex", "pc_ex", "raw_ex", "rs1_ex", "rs2_ex",
+                 "fwd_rs1", "fwd_rs2", "valid_mem", "pc_mem", "raw_mem", "rd_mem", "dmem_rd",
+                 "dmem_wr", "dmem_stall", "valid_wb", "pc_wb", "raw_wb", "rd_we", "rd_wb", "rd_data",
+                 "stall_if", "stall_id", "stall_ex", "flush_id", "flush_ex", "flush_mem", "mem_stall",
+                 "load_use", "muldiv_busy", "mispredict", "trap_enter", "exc_mem", "irq_take", "mret",
+                 "fencei", "trap_cause", "mul_use", "csr_use")
 
     def __init__(self, line):
         g = [part.split() for part in line.split("|")]
@@ -96,6 +104,8 @@ class Cycle:
 
 
 class Insn:
+    __slots__ = ("uid", "pc", "raw", "stages", "fate", "end", "cause")
+
     def __init__(self, uid, pc, cycle):
         self.uid = uid
         self.pc = pc
@@ -275,6 +285,10 @@ def xbrvdsp(raw):
             return f"{names[f7]} {rd},{rs1},{rs2}" if f7 in names else None
         if f3 == 5:
             return {0: f"gfmul4 {rd},{rs1},{rs2}", 1: f"gf.cfg {rs1}", 2: f"gf.rd {rd}"}.get(f7)
+        if f3 == 6:
+            return {0: f"mqmul2 {rd},{rs1},{rs2}", 1: f"mqadd2 {rd},{rs1},{rs2}", 2: f"mqsub2 {rd},{rs1},{rs2}",
+                    3: f"ctadd2 {rd},{rs1},{rs2}", 4: f"ctsub2 {rd},{rs1},{rs2}", 5: f"mq.cfg {rs1}",
+                    6: f"mq.zeta {rs1}", 7: f"mq.rd {rd}", 8: f"mq.rdz {rd}", 9: f"gsmul2 {rd},{rs1},{rs2}"}.get(f7)
     if op == 0x2B:
         n = (raw >> 7) & 3
         if f3 == 0:
@@ -309,8 +323,11 @@ def read_dis(path):
     return asm
 
 
-def lost_cycles(cycles, occupancy):
+def lost_cycles(cycles, occupancy=None):
     """Why nothing retired, for each cycle in which nothing did: {cycle: cause}.
+    It reads only the cycles (occupancy is no longer used, and kept for
+    callers that pass it): whether MEM holds an instruction is its valid
+    bit, which rebuild() checks against its own tracking.
 
     A cycle is lost either because the pipeline was held (a cache miss), or
     because WB holds a bubble. A bubble is followed back, register by
@@ -322,7 +339,8 @@ def lost_cycles(cycles, occupancy):
                "mret" if c.mret else "mispredict" if c.mispredict else "fence.i" if c.fencei else "flush"
 
     def held(c):
-        return "D-cache wait" if c.dmem_stall else "I-cache miss" if c.imem_stall else "stall"
+        return "D-cache wait" if c.dmem_stall else "I-cache miss" if c.imem_stall else \
+            "mqmul2 2nd cycle"                  # the only other hold (mq_unit.v)
 
     def origin(stage, k):
         while True:
@@ -349,7 +367,7 @@ def lost_cycles(cycles, occupancy):
                     stage = "EX"
             elif stage == "WB":
                 if not p.mem_stall:
-                    if p.exc_mem and occupancy[k - 1]["MEM"] is not None:
+                    if p.exc_mem and p.valid_mem:
                         return "trap"
                     stage = "MEM"
             k -= 1

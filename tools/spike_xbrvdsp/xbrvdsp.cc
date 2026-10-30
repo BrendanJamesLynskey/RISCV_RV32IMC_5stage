@@ -1,6 +1,7 @@
 // xbrvdsp.cc — Spike model of Xbrvdsp, BRV32P's DSP extension (step 1:
 // the multiply-accumulate unit; step 2: address generators; step 4: the
-// hardware loop; and the packed GF(2^8) multiply). Loaded with
+// hardware loop; the packed GF(2^8) multiply; packed arithmetic mod q).
+// Loaded with
 //   spike --extlib=libxbrvdsp.so --extension=xbrvdsp ...
 // so that programs using the extension run in lockstep with the RTL.
 // Specification: doc/dsp_extension.md.
@@ -26,6 +27,18 @@
 //   gf.cfg rs1           funct7 0000001, funct3 101, rd 0, rs2 0   poly = rs1[7:0]
 //   gf.rd  rd            funct7 0000010, funct3 101, rs1 0, rs2 0  rd = poly
 // poly resets to 0x1D.
+//   mqmul2 rd, rs1, rs2  funct7 0000000, funct3 110  per 16-bit lane: mont(rs1 * rs2)
+//   mqadd2 rd, rs1, rs2  funct7 0000001, funct3 110  per lane: addq(rs1, rs2)
+//   mqsub2 rd, rs1, rs2  funct7 0000010, funct3 110  per lane: subq(rs1, rs2)
+//   ctadd2 rd, rs1, rs2  funct7 0000011, funct3 110  per lane: addq(rs1, mont(zeta * rs2))
+//   ctsub2 rd, rs1, rs2  funct7 0000100, funct3 110  per lane: subq(rs1, mont(zeta * rs2))
+//   gsmul2 rd, rs1, rs2  funct7 0001001, funct3 110  per lane: mont(zeta * subq(rs2, rs1))
+//   mq.cfg  rs1          funct7 0000101, funct3 110, rd 0, rs2 0   q = rs1[15:0], qp = rs1[31:16],
+//                                                                 zeta = 0
+//   mq.zeta rs1          funct7 0000110, funct3 110, rd 0, rs2 0   zeta = rs1[15:0]
+//   mq.rd   rd           funct7 0000111, funct3 110, rs1 0, rs2 0  rd = {qp, q}
+//   mq.rdz  rd           funct7 0001000, funct3 110, rs1 0, rs2 0  rd = zeta
+// q, qp reset to 3329, 3327; zeta to 0. mont, addq, subq: rtl/core/mq_unit.v.
 // lo/hi are the signed 16-bit halves; sh is the rs2 field (0-31); rnd is
 // 2^(sh-1), or 0 when sh is 0.
 //
@@ -70,6 +83,7 @@ static int16_t  ar_stride[4];
 static bool     ar_br[4];
 static uint32_t lc, lp_start;
 static uint8_t  gf_poly = 0x1D;
+static uint16_t mq_q = 3329, mq_qp = 3327, mq_zeta = 0;
 
 static reg_t loop_next(reg_t pc)          // after a loop-end instruction
 {
@@ -230,6 +244,75 @@ static reg_t x_gf_cfg(processor_t* p, insn_t insn, reg_t pc)
 static reg_t x_gf_rd(processor_t* p, insn_t insn, reg_t pc)
 {
   WRITE_RD(gf_poly);
+  return pc + 4;
+}
+
+static uint16_t mq_mont(uint32_t p)
+{
+  uint32_t m = (uint16_t)(p * mq_qp);
+  uint64_t t = ((uint64_t)p + (uint64_t)m * mq_q) >> 16;
+  return (uint16_t)(t >= mq_q ? t - mq_q : t);
+}
+
+static uint16_t mq_add(uint16_t a, uint16_t b)
+{
+  uint32_t s = (uint32_t)a + b;
+  return (uint16_t)(s >= mq_q ? s - mq_q : s);
+}
+
+static uint16_t mq_sub(uint16_t a, uint16_t b)
+{
+  return (uint16_t)(a >= b ? a - b : a - b + mq_q);
+}
+
+static uint32_t mq_lanes(int f, uint32_t a, uint32_t b)
+{
+  uint32_t r = 0;
+  for (int i = 0; i < 32; i += 16) {
+    uint16_t x = (uint16_t)(a >> i), y = (uint16_t)(b >> i), v;
+    switch (f) {
+      case 0:  v = mq_mont((uint32_t)x * y); break;
+      case 1:  v = mq_add(x, y); break;
+      case 2:  v = mq_sub(x, y); break;
+      case 3:  v = mq_add(x, mq_mont((uint32_t)mq_zeta * y)); break;
+      case 4:  v = mq_sub(x, mq_mont((uint32_t)mq_zeta * y)); break;
+      default: v = mq_mont((uint32_t)mq_zeta * mq_sub(y, x)); break;
+    }
+    r |= (uint32_t)v << i;
+  }
+  return r;
+}
+
+static reg_t x_mqmul2(processor_t* p, insn_t insn, reg_t pc) { WRITE_RD(sext32(mq_lanes(0, RS1, RS2))); return pc + 4; }
+static reg_t x_mqadd2(processor_t* p, insn_t insn, reg_t pc) { WRITE_RD(sext32(mq_lanes(1, RS1, RS2))); return pc + 4; }
+static reg_t x_mqsub2(processor_t* p, insn_t insn, reg_t pc) { WRITE_RD(sext32(mq_lanes(2, RS1, RS2))); return pc + 4; }
+static reg_t x_ctadd2(processor_t* p, insn_t insn, reg_t pc) { WRITE_RD(sext32(mq_lanes(3, RS1, RS2))); return pc + 4; }
+static reg_t x_ctsub2(processor_t* p, insn_t insn, reg_t pc) { WRITE_RD(sext32(mq_lanes(4, RS1, RS2))); return pc + 4; }
+static reg_t x_gsmul2(processor_t* p, insn_t insn, reg_t pc) { WRITE_RD(sext32(mq_lanes(5, RS1, RS2))); return pc + 4; }
+
+static reg_t x_mq_cfg(processor_t* p, insn_t insn, reg_t pc)
+{
+  mq_q = (uint16_t)RS1;
+  mq_qp = (uint16_t)(RS1 >> 16);
+  mq_zeta = 0;
+  return pc + 4;
+}
+
+static reg_t x_mq_zeta(processor_t* p, insn_t insn, reg_t pc)
+{
+  mq_zeta = (uint16_t)RS1;
+  return pc + 4;
+}
+
+static reg_t x_mq_rd(processor_t* p, insn_t insn, reg_t pc)
+{
+  WRITE_RD(sext32((uint32_t)mq_qp << 16 | mq_q));
+  return pc + 4;
+}
+
+static reg_t x_mq_rdz(processor_t* p, insn_t insn, reg_t pc)
+{
+  WRITE_RD(mq_zeta);
   return pc + 4;
 }
 
@@ -410,6 +493,16 @@ class xbrvdsp_t : public extension_t
       {0x0000500B, 0xFE00707F, ALL(x_gfmul4)},
       {0x0200500B, 0xFFF07FFF, ALL(x_gf_cfg)},
       {0x0400500B, 0xFFFFF07F, ALL(x_gf_rd)},
+      {0x0000600B, 0xFE00707F, ALL(x_mqmul2)},
+      {0x0200600B, 0xFE00707F, ALL(x_mqadd2)},
+      {0x0400600B, 0xFE00707F, ALL(x_mqsub2)},
+      {0x0600600B, 0xFE00707F, ALL(x_ctadd2)},
+      {0x0800600B, 0xFE00707F, ALL(x_ctsub2)},
+      {0x1200600B, 0xFE00707F, ALL(x_gsmul2)},
+      {0x0A00600B, 0xFFF07FFF, ALL(x_mq_cfg)},
+      {0x0C00600B, 0xFFF07FFF, ALL(x_mq_zeta)},
+      {0x0E00600B, 0xFFFFF07F, ALL(x_mq_rd)},
+      {0x1000600B, 0xFFFFF07F, ALL(x_mq_rdz)},
       {0x8000000B, 0xFE007FFF, ALL(x_mac_lp)},
       {0x8200000B, 0xFE007FFF, ALL(x_dmac_lp)},
       {0x8400000B, 0xFE007FFF, ALL(x_msu_lp)},
@@ -448,6 +541,16 @@ class xbrvdsp_t : public extension_t
       new disasm_insn_t("gfmul4",  0x0000500B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
       new disasm_insn_t("gf.cfg",  0x0200500B, 0xFFF07FFF, {&xrs1}),
       new disasm_insn_t("gf.rd",   0x0400500B, 0xFFFFF07F, {&xrd}),
+      new disasm_insn_t("mqmul2",  0x0000600B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
+      new disasm_insn_t("mqadd2",  0x0200600B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
+      new disasm_insn_t("mqsub2",  0x0400600B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
+      new disasm_insn_t("ctadd2",  0x0600600B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
+      new disasm_insn_t("ctsub2",  0x0800600B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
+      new disasm_insn_t("gsmul2",  0x1200600B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
+      new disasm_insn_t("mq.cfg",  0x0A00600B, 0xFFF07FFF, {&xrs1}),
+      new disasm_insn_t("mq.zeta", 0x0C00600B, 0xFFF07FFF, {&xrs1}),
+      new disasm_insn_t("mq.rd",   0x0E00600B, 0xFFFFF07F, {&xrd}),
+      new disasm_insn_t("mq.rdz",  0x1000600B, 0xFFFFF07F, {&xrd}),
       new disasm_insn_t("mac.lp",  0x8000000B, 0xFE007FFF, {&xrs1, &xrs2}),
       new disasm_insn_t("dmac.lp", 0x8200000B, 0xFE007FFF, {&xrs1, &xrs2}),
       new disasm_insn_t("msu.lp",  0x8400000B, 0xFE007FFF, {&xrs1, &xrs2}),
@@ -467,6 +570,9 @@ class xbrvdsp_t : public extension_t
     lc = 0;
     lp_start = 0;
     gf_poly = 0x1D;
+    mq_q = 3329;
+    mq_qp = 3327;
+    mq_zeta = 0;
   }
 };
 

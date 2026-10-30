@@ -34,6 +34,10 @@ report_utilization    -file $out/utilization.rpt
 report_utilization    -hierarchical -file $out/utilization_hier.rpt
 report_timing_summary -max_paths 5 -file $out/timing_summary.rpt
 report_timing         -max_paths 1 -nworst 1 -path_type full -file $out/critical_path.rpt
+# Power: Vivado's vectorless estimate (default toggle rates, no simulation
+# activity) at the constrained clock; the hierarchy shows each unit's share.
+# A comparison between designs, not a prediction for a given program.
+report_power          -hierarchical_depth 4 -file $out/power.rpt
 
 set wns  [get_property SLACK [get_timing_paths -max_paths 1 -setup]]
 set fmax [expr {1000.0 / ($period - $wns)}]

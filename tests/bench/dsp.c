@@ -221,6 +221,65 @@ void fir_q15_dmac(const int16_t *x, const int16_t *h, int16_t *y, int outs, int 
   }
 }
 
+/* Hardware loop (step 4). lp.setup runs the body that follows it count
+   times; the body's last instruction (here dmac.lp) marks its end. The whole
+   loop is one asm statement, so the compiler cannot put anything between
+   lp.setup and the body. .balign 4 starts the body on a word: a 32-bit
+   instruction at 2 mod 4 would cost a fetch bubble on every loop-back. */
+static inline void dmac_pairs_lp(int count)   /* count x (x0, h0, x1, h1) */
+{
+  __asm__ volatile (
+    ".balign 4\n\t"
+    ".insn i CUSTOM_1, 6, x0, %0, 0\n\t"          /* lp.setup count */
+    ".insn i CUSTOM_1, 2, t0, x0, 0\n\t"          /* lw.a t0, ar0 */
+    ".insn i CUSTOM_1, 2, t1, x0, 1\n\t"          /* lw.a t1, ar1 */
+    ".insn i CUSTOM_1, 2, t2, x0, 0\n\t"
+    ".insn i CUSTOM_1, 2, t3, x0, 1\n\t"
+    ".insn r CUSTOM_0, 0, 1, x0, t0, t1\n\t"      /* dmac */
+    ".insn r CUSTOM_0, 0, 0x41, x0, t2, t3"        /* dmac.lp: end of the body */
+    :: "r" (count) : "t0", "t1", "t2", "t3", "memory");
+}
+
+/* fir_q15_dmac with the inner loop in hardware */
+__attribute__((noipa))
+void fir_q15_lp(const int16_t *x, const int16_t *h, int16_t *y, int outs, int taps)
+{
+  static int16_t hs[FIR_TAPS + 4] __attribute__((aligned(4)));
+  hs[0] = 0;
+  for (int k = 0; k < taps; k++)
+    hs[k + 1] = h[k];
+  hs[taps + 1] = hs[taps + 2] = hs[taps + 3] = 0;
+
+  AR_CFG(0, 4);
+  AR_CFG(1, 4);
+  for (int n = 0; n < outs; n++) {
+    int odd = n & 1;
+    AR_SET(0, x + n - odd);
+    AR_SET(1, odd ? hs : h);
+    acc_set(0);
+    dmac_pairs_lp(taps / 4 + odd);
+    y[n] = (int16_t)acc_rdh15();
+  }
+}
+
+/* Energy: the whole loop in hardware, four samples per pass (n % 4 == 0) */
+__attribute__((noipa))
+int64_t energy_q15_lp(const int16_t *x, int n)
+{
+  AR_SET(0, x);
+  AR_CFG(0, 4);
+  acc_set(0);
+  __asm__ volatile (
+    ".balign 4\n\t"
+    ".insn i CUSTOM_1, 6, x0, %0, 0\n\t"          /* lp.setup n/4 */
+    ".insn i CUSTOM_1, 2, t0, x0, 0\n\t"          /* lw.a t0, ar0 */
+    ".insn i CUSTOM_1, 2, t1, x0, 0\n\t"
+    ".insn r CUSTOM_0, 0, 1, x0, t0, t0\n\t"      /* dmac */
+    ".insn r CUSTOM_0, 0, 0x41, x0, t1, t1"        /* dmac.lp */
+    :: "r" (n / 4) : "t0", "t1", "memory");
+  return acc_rd40();
+}
+
 static int16_t fir_y[FIR_OUTS];
 
 static int fir_ok(void)
@@ -310,6 +369,19 @@ int main(void)
     fir_q15_dmac(fir_x, fir_h, fir_y, FIR_OUTS, FIR_TAPS);
     if (r) BENCH_MARK(39); else BENCH_MARK(37);
     if (!fir_ok()) return 13;
+  }
+  for (int r = 0; r < 2; r++) {
+    for (int n = 0; n < FIR_OUTS; n++) fir_y[n] = 0;
+    if (r) BENCH_MARK(42); else BENCH_MARK(40);
+    fir_q15_lp(fir_x, fir_h, fir_y, FIR_OUTS, FIR_TAPS);
+    if (r) BENCH_MARK(43); else BENCH_MARK(41);
+    if (!fir_ok()) return 14;
+  }
+  for (int r = 0; r < 2; r++) {
+    if (r) BENCH_MARK(46); else BENCH_MARK(44);
+    e = energy_q15_lp(energy_x, ENERGY_N);
+    if (r) BENCH_MARK(47); else BENCH_MARK(45);
+    if (e != energy_expect) return 15;
   }
 
   return 0;

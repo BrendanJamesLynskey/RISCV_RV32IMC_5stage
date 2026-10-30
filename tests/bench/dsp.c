@@ -514,11 +514,54 @@ void lfsr_clmul(uint32_t *out, uint32_t s, int n);
 void xorshift32(uint32_t *out, uint32_t s, int n);
 uint32_t lfsr_jump(uint32_t s, uint32_t e);
 uint32_t lfsr_jump_clmul(uint32_t s, uint32_t e);
+/* GF(2^8) (gf256.c, plain; gf256_x.c, gfmul4) */
+void rs_syndromes(uint8_t *S, const uint8_t *r);
+void rs_syndromes_gf(uint8_t *S, const uint8_t *r);
+int rs_chien(uint8_t *pos, const uint8_t *lam);
+int rs_chien_gf(uint8_t *pos, const uint8_t *lam);
+void aes_invmix(uint32_t *out, const uint32_t *in, int words);
+void aes_invmix_gf(uint32_t *out, const uint32_t *in, int words);
 
 static int16_t fir_y[FIR_OUTS];
 
-/* Clears the words before checking them, so a kernel that writes nothing
-   cannot pass on the previous run's output */
+/* Each clears what it checks, so a kernel that writes nothing cannot pass
+   on the previous run's output */
+static int bytes_eq(uint8_t *a, const uint8_t *b, int n)
+{
+  int ok = 1;
+  for (int i = 0; i < n; i++) {
+    ok &= a[i] == b[i];
+    a[i] = 0;
+  }
+  return ok;
+}
+
+/* timed(): kind 0, T-table AES; 1, Zkne AES; 2, log-table RS syndromes;
+   3, gfmul4 syndromes. The input (and round keys) are first copied to the
+   same buffers, and the kernel runs cold and then warm between markers 140
+   and 141, so two calls with the same kind follow exactly the same path and
+   touch the same addresses: only the data differs. */
+static uint8_t t_in[256] __attribute__((aligned(4)));
+static uint8_t t_rk[176] __attribute__((aligned(4)));
+static uint8_t t_out[256] __attribute__((aligned(4)));
+
+__attribute__((noipa))
+static void timed(int kind, const uint8_t *in, int n, const uint8_t *rk)
+{
+  for (int i = 0; i < n; i++) t_in[i] = in[i];
+  for (int i = 0; i < 176; i++) t_rk[i] = rk ? rk[i] : 0;
+  for (int r = 0; r < 2; r++) {
+    if (r) BENCH_MARK(140);
+    switch (kind) {
+    case 0:  aes128_enc_t((uint32_t *)t_out, (const uint32_t *)t_in, (const uint32_t *)t_rk, AES_BLOCKS); break;
+    case 1:  aes128_enc_zk((uint32_t *)t_out, (const uint32_t *)t_in, (const uint32_t *)t_rk, AES_BLOCKS); break;
+    case 2:  rs_syndromes(t_out, t_in); break;
+    default: rs_syndromes_gf(t_out, t_in); break;
+    }
+    if (r) BENCH_MARK(141);
+  }
+}
+
 static int words_eq(uint32_t *a, const uint32_t *b, int n)
 {
   int ok = 1;
@@ -717,24 +760,6 @@ int main(void)
       if (act[i] != aes_expect[i]) return 34 + k;
   }
 
-  /* Timing against the data (Zkt): each AES kernel run, warm, on two keys
-     and plaintexts through the very same call, so only the data differs.
-     Markers 80/81 and 82/83: T-table, keys 1 and 2; 84/85 and 86/87: Zkne. */
-  for (int z = 0; z < 2; z++)
-    for (int k = 0; k < 4; k++) {
-      const uint32_t *pt = (const uint32_t *)(k < 2 ? aes_pt : aes_pt2);
-      const uint32_t *rk = (const uint32_t *)(k < 2 ? aes_rk : aes_rk2);
-      const uint8_t *ex = k < 2 ? aes_expect : aes_expect2;
-      void (*f)(uint32_t *, const uint32_t *, const uint32_t *, int) = z ? aes128_enc_zk : aes128_enc_t;
-      if (k == 1) { if (z) BENCH_MARK(84); else BENCH_MARK(80); }
-      if (k == 3) { if (z) BENCH_MARK(86); else BENCH_MARK(82); }
-      f((uint32_t *)act, pt, rk, AES_BLOCKS);
-      if (k == 1) { if (z) BENCH_MARK(85); else BENCH_MARK(81); }
-      if (k == 3) { if (z) BENCH_MARK(87); else BENCH_MARK(83); }
-      for (int i = 0; i < 16 * AES_BLOCKS; i++)
-        if (act[i] != ex[i]) return 44 + 4 * z + k;
-    }
-
   /* CRC-32 of 256 bytes: table-driven, then carry-less multiply; cold first */
   for (int k = 0; k < 4; k++) {
     uint32_t c;
@@ -775,6 +800,34 @@ int main(void)
   WARM(108, xorshift32(rnd, LFSR_SEED, LFSR_WORDS), words_eq(rnd, xs_expect, LFSR_WORDS), 73);
   WARM(110, c = lfsr_jump(LFSR_SEED, LFSR_JUMP), c == lfsr_jump_expect, 74);
   WARM(112, c = lfsr_jump_clmul(LFSR_SEED, LFSR_JUMP), c == lfsr_jump_expect, 75);
+
+  /* GF(2^8): Reed-Solomon syndromes and Chien search, plain then gfmul4
+     (markers 114-121); AES InvMixColumns of 256 bytes (122-125) */
+  static uint8_t syn[RS_NSYM] __attribute__((aligned(4)));
+  static uint8_t pos[RS_ERRS + 4];
+  WARM(114, rs_syndromes(syn, rs_rx), bytes_eq(syn, rs_syn_expect, RS_NSYM), 76);
+  WARM(116, rs_syndromes_gf(syn, rs_rx), bytes_eq(syn, rs_syn_expect, RS_NSYM), 77);
+  WARM(118, c = rs_chien(pos, rs_lambda), c == RS_ERRS && bytes_eq(pos, rs_pos_expect, RS_ERRS), 78);
+  WARM(120, c = rs_chien_gf(pos, rs_lambda), c == RS_ERRS && bytes_eq(pos, rs_pos_expect, RS_ERRS), 79);
+  WARM(122, aes_invmix(rnd, (const uint32_t *)aes_pt, 64), bytes_eq((uint8_t *)rnd, aes_invmix_expect, 256), 80);
+  WARM(124, aes_invmix_gf(rnd, (const uint32_t *)aes_pt, 64), bytes_eq((uint8_t *)rnd, aes_invmix_expect, 256), 81);
+
+  /* Timing against the data: each kernel on two inputs, through timed()
+     (markers 140/141, in this order), after a first call on the second
+     input that is not compared: it brings timed()'s own code into the
+     I-cache (GCC unrolls its cold-then-warm loop, so the warm run's code is
+     first fetched by the first warm run). Zkne AES and the gfmul4 syndromes
+     must then take the same cycles on both inputs; the T-table AES and the
+     log-table syndromes need not. */
+  for (int z = 0; z < 4; z++)
+    for (int k = 0; k < 3; k++) {
+      int two = k != 1;
+      if (z < 2) timed(z, two ? aes_pt2 : aes_pt, 16 * AES_BLOCKS, two ? aes_rk2 : aes_rk);
+      else       timed(z, two ? rs_rx2 : rs_rx, RS_N, 0);
+      if (z < 2 ? !bytes_eq(t_out, two ? aes_expect2 : aes_expect, 16 * AES_BLOCKS)
+                : !bytes_eq(t_out, two ? rs_syn2_expect : rs_syn_expect, RS_NSYM))
+        return 82 + 3 * z + k;
+    }
 
   return 0;
 }

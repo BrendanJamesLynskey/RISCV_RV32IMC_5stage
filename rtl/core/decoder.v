@@ -204,6 +204,12 @@ module decoder (
                                        funct7 == 7'b0000011 || funct7 == 7'b0000100))) begin
           ctrl[`CTRL_REG_WR] = 1'b1;                  // acc.rd*, sadd, ssub, radd16, rsub16, pk16
           ctrl[`CTRL_WB_SEL] = WB_DSP;
+        end else if (funct3 == 3'b101 && funct7 == 7'b0000001 && rd_addr == 5'd0 && rs2_addr == 5'd0)
+          ;                                           // gf.cfg (gf_unit.v)
+        else if (funct3 == 3'b101 && (funct7 == 7'b0000000 ||
+                                      (funct7 == 7'b0000010 && rs1_addr == 5'd0 && rs2_addr == 5'd0))) begin
+          ctrl[`CTRL_REG_WR] = 1'b1;                  // gfmul4, gf.rd
+          ctrl[`CTRL_WB_SEL] = WB_DSP;
         end else
           ctrl[`CTRL_ILLEGAL] = 1'b1;
       end

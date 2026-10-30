@@ -248,8 +248,47 @@ def read_retire_trace(path):
     return out
 
 
+ABI = ("zero ra sp gp tp t0 t1 t2 s0 s1 a0 a1 a2 a3 a4 a5 a6 a7 "
+       "s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 t3 t4 t5 t6").split()
+
+
+def xbrvdsp(raw):
+    """Assembly for an Xbrvdsp instruction (doc/dsp_extension.md), which
+    objdump only shows as .insn; None if raw is not a legal one."""
+    op, f3, f7 = raw & 0x7F, (raw >> 12) & 7, raw >> 25
+    rd, rs1, rs2, imm = ABI[(raw >> 7) & 31], ABI[(raw >> 15) & 31], ABI[(raw >> 20) & 31], raw >> 20
+    if op == 0x0B:
+        if f3 == 0:
+            names = {0: "mac", 1: "dmac", 2: "msu", 0x40: "mac.lp", 0x41: "dmac.lp", 0x42: "msu.lp"}
+            if f7 in names:
+                return f"{names[f7]} {rs1},{rs2}"
+            return {4: f"acc.set {rs1}", 5: f"acc.seth {rs1}"}.get(f7)
+        if f3 in (1, 2):
+            return f"{'acc.rd' if f3 == 1 else 'acc.rdh'} {rd},{(raw >> 20) & 31}"
+        if f3 == 3:
+            return {0: f"acc.rdl {rd}", 1: f"acc.rdx {rd}"}.get(f7)
+        if f3 == 4:
+            names = {0: "sadd", 1: "ssub", 2: "radd16", 3: "rsub16", 4: "pk16"}
+            return f"{names[f7]} {rd},{rs1},{rs2}" if f7 in names else None
+    if op == 0x2B:
+        n = (raw >> 7) & 3
+        if f3 == 0:
+            return {0: f"ar.set ar{n},{rs1}", 1: f"ar.cfg ar{n},{rs1}", 3: f"ar.mode ar{n},{rs1}",
+                    2: f"lp.set{'s' if n else ''} {rs1}"}.get(f7)
+        if f3 in (1, 2, 5):
+            return f"{ {1: 'lh.a', 2: 'lw.a', 5: 'lhu.a'}[f3]} {rd},ar{imm & 3}"
+        if f3 == 3:
+            return {8: f"lp.rd {rd}", 9: f"lp.rds {rd}"}.get(imm) or \
+                f"{ {0: 'ar.rd', 1: 'ar.rds', 3: 'ar.rdm'}.get(imm >> 2, 'ar.?')} {rd},ar{imm & 3}"
+        if f3 == 6:
+            return f"lp.setup {rs1}"
+        if f3 == 7:
+            return "lp.end"
+    return None
+
+
 def read_dis(path):
-    """pc -> assembly text from objdump -d."""
+    """pc -> assembly text from objdump -d (with Xbrvdsp named: xbrvdsp())."""
     asm = {}
     if not path:
         return asm
@@ -258,6 +297,9 @@ def read_dis(path):
         m = line_re.match(line.rstrip())
         if m:
             text = m.group(2).split("#")[0].strip()
+            x = re.match(r"\.insn\s+\d+,\s*0x([0-9a-f]+)", text)
+            if x:
+                text = xbrvdsp(int(x.group(1), 16)) or text
             asm[int(m.group(1), 16)] = re.sub(r"\s+", " ", text)
     return asm
 

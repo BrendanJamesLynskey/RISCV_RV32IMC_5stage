@@ -80,6 +80,9 @@ the main event of each cycle: `I` I-cache miss, `D` D-cache miss, `L`
 load-use bubble, `U` mul-use bubble, `B` divide busy, `P` mispredict, `T` trap, `Q` interrupt,
 `R` MRET, `F` FENCE.I.
 
+objdump shows the Xbrvdsp instructions (the DSP extension) only as `.insn` words;
+`pipeview.py` names them (`lw.a t0,ar0`, `dmac.lp t2,t3`, …) from their encodings.
+
 The examples below are from the test runs, unedited.
 
 ### Load-use: one bubble

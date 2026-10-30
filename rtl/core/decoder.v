@@ -210,6 +210,14 @@ module decoder (
                                       (funct7 == 7'b0000010 && rs1_addr == 5'd0 && rs2_addr == 5'd0))) begin
           ctrl[`CTRL_REG_WR] = 1'b1;                  // gfmul4, gf.rd
           ctrl[`CTRL_WB_SEL] = WB_DSP;
+        end else if (funct3 == 3'b110 && (funct7 == 7'b0000101 || funct7 == 7'b0000110) &&
+                     rd_addr == 5'd0 && rs2_addr == 5'd0)
+          ;                                           // mq.cfg, mq.zeta (mq_unit.v)
+        else if (funct3 == 3'b110 && (funct7[6:3] == 4'b0000 && funct7[2:0] <= 3'b100 || funct7 == 7'b0001001 ||
+                                      ((funct7 == 7'b0000111 || funct7 == 7'b0001000) &&
+                                       rs1_addr == 5'd0 && rs2_addr == 5'd0))) begin
+          ctrl[`CTRL_REG_WR] = 1'b1;                  // mqmul2 .. ctsub2, gsmul2, mq.rd, mq.rdz
+          ctrl[`CTRL_WB_SEL] = WB_DSP;
         end else
           ctrl[`CTRL_ILLEGAL] = 1'b1;
       end

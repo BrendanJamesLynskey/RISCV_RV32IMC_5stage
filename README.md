@@ -8,7 +8,7 @@ A synthesisable RV32IMC RISC-V SoC implemented in Verilog-2001. Features a class
 
 | Category | Detail |
 |---|---|
-| **ISA** | RV32IMC — Base Integer, Multiply/Divide, Compressed — with the ratified scalar-crypto extensions **Zbkb**, **Zbkc**, **Zbkx**, **Zknh**, **Zkne** and **Zknd** ([doc/crypto_extensions.md](doc/crypto_extensions.md)), plus **Xbrvdsp**, its own DSP extension (multiply-accumulate into a 40-bit accumulator, address generators that load and step a pointer in one instruction (linear or bit-reversed), a hardware loop, saturating and packed-halves arithmetic, and a packed GF(2⁸) multiply; [doc/dsp_extension.md](doc/dsp_extension.md), [doc/finite_fields.md](doc/finite_fields.md)) |
+| **ISA** | RV32IMC — Base Integer, Multiply/Divide, Compressed — with the ratified scalar-crypto extensions **Zbkb**, **Zbkc**, **Zbkx**, **Zknh**, **Zkne** and **Zknd** ([doc/crypto_extensions.md](doc/crypto_extensions.md)), plus **Xbrvdsp**, its own DSP extension (multiply-accumulate into a 40-bit accumulator, address generators that load and step a pointer in one instruction (linear or bit-reversed), a hardware loop, saturating and packed-halves arithmetic, a packed GF(2⁸) multiply, and packed arithmetic mod q with NTT butterflies for ML-KEM; [doc/dsp_extension.md](doc/dsp_extension.md), [doc/finite_fields.md](doc/finite_fields.md), [doc/lattice_crypto.md](doc/lattice_crypto.md)) |
 | **Pipeline** | 5-stage (IF / ID / EX / MEM / WB), in-order |
 | **Hazards** | Full data forwarding; load-use, mul-use and csr-use stalls; flush on misprediction |
 | **Branch prediction** | 2-bit saturating BHT + Branch Target Buffer (BTB) |
@@ -104,7 +104,7 @@ RISCV_RV32IMC_5stage/
 │   │   ├── elf2hex.py                # ELF image → $readmemh hex
 │   │   └── env/                      # Bare-metal test environment (riscv_test.h, link.ld)
 │   ├── directed/                     # Own tests: FENCE.I, misaligned traps, interrupts
-│   └── bench/                        # DSP, crypto and GF(2) benchmarks (C), data generator, cycle report
+│   └── bench/                        # DSP, crypto, finite-field and ML-KEM benchmarks (C), data generator, ML-KEM model, cycle report
 ├── tools/spike_xbrvdsp/              # Spike model of the DSP extension, for lockstep
 ├── scripts/
 │   ├── lint.sh                       # Verilator -Wall lint
@@ -116,7 +116,8 @@ RISCV_RV32IMC_5stage/
 │   ├── pipeline_trace.md             # The pipeline trace, its checking, and real diagrams
 │   ├── dsp_extension.md              # Xbrvdsp: encodings, semantics, micro-architecture
 │   ├── crypto_extensions.md          # Zbkb/c/x, Zknh, Zkne, Zknd: implementation, tests, SHA-256, AES, CRC-32
-│   └── finite_fields.md              # Finite fields: CRCs, LFSRs, gfmul4, Reed–Solomon
+│   ├── finite_fields.md              # Finite fields: CRCs, LFSRs, gfmul4, Reed–Solomon
+│   └── lattice_crypto.md             # Arithmetic mod q for ML-KEM: the mq unit, NTT butterflies, test vectors
 └── README.md
 ```
 
@@ -281,6 +282,12 @@ back to the event that made it).
 | `rs_chien_gf` | The same, the 16 terms in four words, one `gfmul4` per word per point | 4,514 | 17.7 per point | 0.98 | mispredicts: 42 cycles |
 | `aes_invmix` | AES InvMixColumns of 256 bytes, the fast constant-time C (four bytes per xtime) | 3,247 | 12.7 per byte | 0.99 | I-cache misses: 26 cycles |
 | `aes_invmix_gf` | The same as FIPS-197's matrix: four `gfmul4` per column, by 14, 11, 13 and 9 | 1,130 | 4.4 per byte | 0.93 | load-use bubbles: 64 cycles |
+| `mlkem_ntt` | ML-KEM's forward NTT (7 layers, 896 butterflies mod 3329), pq-crystals' reference C | 24,146 | 27.0 per butterfly | 0.84 | mul-use bubbles: 2,304 cycles |
+| `mlkem_ntt_ct` | The same, two coefficients per word, `ctadd2`/`ctsub2`: two instructions per two butterflies | 6,913 | 7.7 per butterfly | 0.67 | D-cache waits: 2,035 cycles |
+| `mlkem_ntt_ct2` | The same, two layers per pass, each step scheduled by hand | 3,897 | 4.3 per butterfly | 0.69 | D-cache waits: 1,095 cycles |
+| `mlkem_invntt` / `mlkem_invntt_x2` | The inverse NTT: the reference C, then `gsmul2`/`mqadd2` two layers per pass | 34,375 / 4,095 | 38.4 / 4.6 per butterfly | 0.80 / 0.65 | mul-use bubbles: 5,248 cycles / D-cache waits: 1,373 cycles |
+| `mlkem_basemul` / `mlkem_basemul_x` | The 128 products of degree-one polynomials: the reference, then `mqmul2`, `ctadd2`, `mqadd2` | 11,498 / 3,356 | 89.8 / 26.2 per pair | 0.70 / 0.60 | mul-use bubbles: 1,792 cycles / D-cache waits: 1,052 cycles |
+| `mlkem_polymul` / `mlkem_polymul_x` | A whole product a·b in ML-KEM's ring: two NTTs, basemul, the inverse NTT | 94,010 / 15,302 | the same, per product | 0.81 / 0.66 | mul-use bubbles: 11,648 cycles / D-cache waits: 4,510 cycles |
 
 The extension removes the 64-bit carry chain from the energy kernel (3.5× with `dmac`) and the multiply, add
 and saturation code from the FIR. With `mac` alone the FIR gains 15%, because GCC puts each load directly
@@ -302,7 +309,13 @@ computes every CRC up to 32 bits, only its two constants changing (CRC-32C, CRC-
 per byte against 6.1 to 11.2 for their tables), steps an LFSR 32 bits at a time (29× a step at a time, and
 faster than xorshift32), and jumps it a million steps ahead in 289 cycles (34× the plain C). Xbrvdsp's packed GF(2⁸) multiply,
 `gfmul4` (four byte lanes, the field's polynomial programmable), takes the Reed–Solomon syndromes 14.5× and the
-Chien search 11.3× faster than exp/log tables, and AES InvMixColumns 2.9× faster than packed C. The benchmark
+Chien search 11.3× faster than exp/log tables, and AES InvMixColumns 2.9× faster than packed C. Xbrvdsp's
+packed arithmetic mod q ([doc/lattice_crypto.md](doc/lattice_crypto.md)), two 16-bit lanes with Montgomery
+multiplication and Cooley–Tukey and Gentleman–Sande butterfly instructions, takes ML-KEM's NTT 6.2×, its
+inverse 8.4× and a whole product of two polynomials 6.1× faster than pq-crystals' reference C; once the
+arithmetic is one instruction per butterfly pair, the write-through D-cache's stores set the pace, and merging
+two NTT layers per pass halves them. The ML-KEM model the expected values come from passes NIST's ACVP vectors
+and C2SP CCTV's accumulated test vectors. The benchmark
 also checks Zkt's promise of data-independent timing, running each kernel on two inputs through the same code:
 the Zkne AES takes 5,018 cycles on both keys and plaintexts and the `gfmul4` syndromes 6,221 on both received
 words, while the T-table AES (20,836 and 20,979) and the log-table syndromes (89,847 and 88,489, whose zero
@@ -339,7 +352,7 @@ accumulator, post-increment loads and a zero-overhead loop would remove most of 
 |---|---|---|
 | riscv-tests `rv32ui`, `rv32um`, `rv32uc` | Every RV32I, M and C instruction, with bypass and hazard cases | all pass |
 | The same `rv32ui`/`rv32um` sources assembled **with C** | Mixed 16/32-bit code: 32-bit instructions straddling words, branches sharing a word | all pass |
-| Directed (`tests/directed`) | The DSP extension (every instruction, rounding, saturation, 40-bit wrap and readback; a MAC interrupted in EX leaves the accumulator untouched; the address generators' strides, extension, readback and precise misaligned traps, and interrupted `lw.a` loops; `sadd`/`ssub` at and across both limits; `radd16`/`rsub16`/`pk16` at the extremes; bit-reversed addressing (8, 4 and 1024 points, and the wrap); hardware loops of 0 to many passes, one-instruction bodies, branches and compressed code in the body, save and restore around an inner loop, and interrupts at the loop end; the packed GF(2⁸) multiply in two fields and a polynomial with bit 7 set, `gf.cfg` straight before its use, and a `gf.cfg` behind a trapping load); Zbkb, Zbkc, Zbkx, Zknh, Zkne and Zknd, every instruction (AES with every byte select, carry-less products at the edges, permutes with out-of-range indexes) against Python and Spike, with forwarding; a multiply's or a CSR instruction's result used by the next instruction in every role (rs1, rs2, branch, store data, load address, JALR target, MAC operand, the next multiply or CSR instruction); FENCE.I on cached code, and in the cycle an I-cache fill completes; misaligned-access traps; timer interrupts (cause, and nothing lost or run twice) | all pass |
+| Directed (`tests/directed`) | The DSP extension (every instruction, rounding, saturation, 40-bit wrap and readback; a MAC interrupted in EX leaves the accumulator untouched; the address generators' strides, extension, readback and precise misaligned traps, and interrupted `lw.a` loops; `sadd`/`ssub` at and across both limits; `radd16`/`rsub16`/`pk16` at the extremes; bit-reversed addressing (8, 4 and 1024 points, and the wrap); hardware loops of 0 to many passes, one-instruction bodies, branches and compressed code in the body, save and restore around an inner loop, and interrupts at the loop end; the packed GF(2⁸) multiply in two fields and a polynomial with bit 7 set, `gf.cfg` straight before its use, and a `gf.cfg` behind a trapping load; arithmetic mod q, every instruction, with ML-KEM's and Falcon's q, `mq.zeta` and `mq.cfg` straight before their use, `mqmul2`'s second MEM cycle with a load miss and a dependent instruction behind it, and `mq.cfg`/`mq.zeta` behind trapping loads); Zbkb, Zbkc, Zbkx, Zknh, Zkne and Zknd, every instruction (AES with every byte select, carry-less products at the edges, permutes with out-of-range indexes) against Python and Spike, with forwarding; a multiply's or a CSR instruction's result used by the next instruction in every role (rs1, rs2, branch, store data, load address, JALR target, MAC operand, the next multiply or CSR instruction); FENCE.I on cached code, and in the cycle an I-cache fill completes; misaligned-access traps; timer interrupts (cause, and nothing lost or run twice) | all pass |
 | Lockstep with Spike | Every ISA and directed test except `timer_irq` and `dsp_irq` (Spike has no timer; both check themselves), compared instruction by instruction; tests of the DSP extension use its Spike model (`tools/spike_xbrvdsp`) | all match |
 | Pipeline trace | Every ISA and directed test: the rebuilt pipeline matches the RTL's stage registers every cycle, and its retirements match the retire trace | all check |
 | SoC testbench + cocotb | Directed SoC program: GPIO, UART byte, caches, predictor training, ECALL | 30/30, 14/14 |
@@ -471,15 +484,18 @@ Artix-7 on a Digilent Nexys A7-100T; 100 MHz target. Whole SoC, with the 32 KB S
 
 | Resource | Used | Available | |
 |---|---|---|---|
-| LUTs | 11,077 | 63,400 | 17.5% (the cache arrays are LUT RAM; the Zk unit about 1,790; the DSP unit, AGU and loop unit about 700 together; the GF(2⁸) unit 186) |
-| Registers | 7,769 | 126,800 | 6.1% |
+| LUTs | 11,889 | 63,400 | 18.8% (the cache arrays are LUT RAM; the Zk unit about 1,790; the DSP unit, AGU and loop unit about 700 together; the GF(2⁸) unit 200; the mod-q unit 1,291) |
+| Registers | 7,884 | 126,800 | 6.2% |
 | Block RAM (36 Kb) | 8 | 135 | the 32 KB SRAM |
-| DSP48 | 7 | 240 | 4 for the 33×33 multiplier, 3 for the DSP unit's two 16×16 multipliers |
-| **Fmax** | **65.3 MHz** | | WNS −5.3 ns at 10 ns |
+| DSP48 | 16 | 240 | 4 for the 33×33 multiplier, 3 for the DSP unit's two 16×16 multipliers, 9 for the mod-q unit |
+| **Fmax** | **63.9 MHz** | | WNS −5.7 ns at 10 ns |
+| Power (vectorless) | 222 mW | | 137 mW dynamic and 85 mW static at the 100 MHz constraint; default toggle rates, so a comparison between designs, not a program's power |
 
-**Critical path** (18 logic levels, 15.3 ns, 76% routing): fetch, from `pc_if` through the I-cache tag and data
-LUT-RAM reads and the RV32C alignment into the IF/ID register. In other runs it was the next-PC loop through the
-same reads (15.3 ns), or forwarding into a branch target and the mispredict logic (14.5 ns).
+**Critical path** (25 logic levels, 15.5 ns, 68% routing): the accumulator readback (`acc.rd`'s rounding and
+saturation) into the EX result register. Before it, fetch, from `pc_if` through the I-cache tag and data
+LUT-RAM reads and the RV32C alignment into the IF/ID register (18 levels, 15.3 ns). In other runs it was the
+next-PC loop through the same reads (15.3 ns), or forwarding into a branch target and the mispredict logic
+(14.5 ns).
 The worst path moves between runs. Two limits take turns: fetching, aligning and predicting in one cycle, and
 resolving a branch in EX on forwarded operands. Raising Fmax much further means splitting fetch over two stages
 and taking the branch target off the forwarding path.
@@ -509,7 +525,9 @@ predicting in one cycle is what limits the clock now; splitting fetch into two s
 | Zbkb and Zknh (`zk_unit`) | 67.4 MHz (placement noise: the unit is not on the worst path) | forwarding into a branch target and the mispredict, into the ID/EX register; Zk cost about 730 LUTs, with one rotator shared by `ror`, `rori` and `rol` (two separate rotators cost about 1,140) |
 | Zkne and Zknd (AES) | 65.3 MHz | the next-PC loop; AES cost 489 LUTs (two S-boxes and the GF(2⁸) constant multiplies) |
 | Zbkc and Zbkx | 64.1 MHz | fetch into IF/ID (15.5 ns), not the new unit; 567 LUTs, mostly the 32×32 carry-less multiplier array |
-| Packed GF(2⁸) multiply (`gf_unit`) | **65.3 MHz** | fetch into IF/ID (18 logic levels), not the new unit; `gf_unit` 186 LUTs and 8 registers (the design grew 408 LUTs, the rest in result selection and placement) |
+| Packed GF(2⁸) multiply (`gf_unit`) | 65.3 MHz | fetch into IF/ID (18 logic levels), not the new unit; `gf_unit` 186 LUTs and 8 registers (the design grew 408 LUTs, the rest in result selection and placement) |
+| Arithmetic mod q, first version (whole reduction in MEM) | 47.5 MHz | the new unit: two multipliers in series and three add-and-compare stages in MEM (21 ns) |
+| Arithmetic mod q (`mq_unit`) | **63.9 MHz** | `acc.rd`'s rounding and saturation into the EX result register, not the new unit; `mq_unit` 1,291 LUTs, 97 registers and 9 DSP48s, with the quotient for ζ precomputed so that EX and MEM each hold one multiplier in series; vectorless power 192 → 222 mW |
 
 Moving the multiply also cut the DSP48s from 15 to 7: the old RTL wrote three 64-bit products (signed × signed,
 signed × unsigned, unsigned × unsigned), and Vivado built each. One 33×33 signed multiply with the operands

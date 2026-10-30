@@ -521,6 +521,18 @@ int rs_chien(uint8_t *pos, const uint8_t *lam);
 int rs_chien_gf(uint8_t *pos, const uint8_t *lam);
 void aes_invmix(uint32_t *out, const uint32_t *in, int words);
 void aes_invmix_gf(uint32_t *out, const uint32_t *in, int words);
+/* ML-KEM's ring (mlkem.c, as pq-crystals' reference; mlkem_x.c, mq_unit) */
+void mlkem_ntt(int16_t *r);
+void mlkem_invntt(int16_t *r);
+void mlkem_basemul(int16_t *r, const int16_t *a, const int16_t *b);
+void mlkem_polymul(int16_t *c, int16_t *a, int16_t *b);
+void mlkem_ntt_mq(uint16_t *r);
+void mlkem_ntt_ct(uint16_t *r);
+void mlkem_ntt_ct2(uint16_t *r);
+void mlkem_invntt_x(uint16_t *r);
+void mlkem_invntt_x2(uint16_t *r);
+void mlkem_basemul_x(uint16_t *r, const uint16_t *a, const uint16_t *b);
+void mlkem_polymul_x(uint16_t *c, uint16_t *a, uint16_t *b);
 
 static int16_t fir_y[FIR_OUTS];
 
@@ -560,6 +572,25 @@ static void timed(int kind, const uint8_t *in, int n, const uint8_t *rk)
     }
     if (r) BENCH_MARK(141);
   }
+}
+
+/* A polynomial against the expected one, mod q: the reference leaves
+   coefficients unreduced and signed; mlkem_x.c must give them exactly */
+static int poly_eq(uint16_t *a, const uint16_t *b, int reduce)
+{
+  int ok = 1;
+  for (int i = 0; i < 256; i++) {
+    int v = reduce ? ((int16_t)a[i] % MLKEM_Q + MLKEM_Q) % MLKEM_Q : a[i];
+    ok &= v == b[i];
+    a[i] = 0;
+  }
+  return ok;
+}
+
+static void poly_copy(uint16_t *d, const uint16_t *s)
+{
+  for (int i = 0; i < 256; i++)
+    d[i] = s[i];
 }
 
 static int words_eq(uint32_t *a, const uint32_t *b, int n)
@@ -811,6 +842,40 @@ int main(void)
   WARM(120, c = rs_chien_gf(pos, rs_lambda), c == RS_ERRS && bytes_eq(pos, rs_pos_expect, RS_ERRS), 79);
   WARM(122, aes_invmix(rnd, (const uint32_t *)aes_pt, 64), bytes_eq((uint8_t *)rnd, aes_invmix_expect, 256), 80);
   WARM(124, aes_invmix_gf(rnd, (const uint32_t *)aes_pt, 64), bytes_eq((uint8_t *)rnd, aes_invmix_expect, 256), 81);
+
+  /* ML-KEM's ring, the reference then the extension: the NTT (markers
+     126-131: reference, mqmul2 alone, butterfly instructions; 146-147, the
+     butterfly instructions two layers per pass), the inverse NTT (132-135;
+     148-149, two layers per pass),
+     basemul (136-139) and a whole product a * b (142-145).
+     Inputs are copied in before each run (outside the markers): the
+     transforms work in place. */
+#define WARM_POLY(m, setup, run, ok, fail)      \
+  for (int k = 0; k < 2; k++) {                 \
+    setup;                                      \
+    if (k) BENCH_MARK(m);                       \
+    run;                                        \
+    if (k) BENCH_MARK((m) + 1);                 \
+    if (!(ok)) return fail;                     \
+  }
+  static uint16_t pa[256] __attribute__((aligned(4))), pb[256] __attribute__((aligned(4)));
+  static uint16_t pc[256] __attribute__((aligned(4)));
+  int16_t *sa = (int16_t *)pa, *sb = (int16_t *)pb, *sc = (int16_t *)pc;
+  WARM_POLY(126, poly_copy(pa, mlkem_a), mlkem_ntt(sa), poly_eq(pa, mlkem_ntt_a, 1), 100);
+  WARM_POLY(128, poly_copy(pa, mlkem_a), mlkem_ntt_mq(pa), poly_eq(pa, mlkem_ntt_a, 0), 101);
+  WARM_POLY(130, poly_copy(pa, mlkem_a), mlkem_ntt_ct(pa), poly_eq(pa, mlkem_ntt_a, 0), 102);
+  WARM_POLY(146, poly_copy(pa, mlkem_a), mlkem_ntt_ct2(pa), poly_eq(pa, mlkem_ntt_a, 0), 109);
+  WARM_POLY(132, poly_copy(pa, mlkem_ntt_a), mlkem_invntt(sa), poly_eq(pa, mlkem_invntt_expect, 1), 103);
+  WARM_POLY(134, poly_copy(pa, mlkem_ntt_a), mlkem_invntt_x(pa), poly_eq(pa, mlkem_invntt_expect, 0), 104);
+  WARM_POLY(148, poly_copy(pa, mlkem_ntt_a), mlkem_invntt_x2(pa), poly_eq(pa, mlkem_invntt_expect, 0), 110);
+  WARM_POLY(136, (poly_copy(pa, mlkem_ntt_a), poly_copy(pb, mlkem_ntt_b)), mlkem_basemul(sc, sa, sb),
+            poly_eq(pc, mlkem_basemul_expect, 1), 105);
+  WARM_POLY(138, (poly_copy(pa, mlkem_ntt_a), poly_copy(pb, mlkem_ntt_b)), mlkem_basemul_x(pc, pa, pb),
+            poly_eq(pc, mlkem_basemul_expect, 0), 106);
+  WARM_POLY(142, (poly_copy(pa, mlkem_a), poly_copy(pb, mlkem_b)), mlkem_polymul(sc, sa, sb),
+            poly_eq(pc, mlkem_mul_expect, 1), 107);
+  WARM_POLY(144, (poly_copy(pa, mlkem_a), poly_copy(pb, mlkem_b)), mlkem_polymul_x(pc, pa, pb),
+            poly_eq(pc, mlkem_mul_expect, 0), 108);
 
   /* Timing against the data: each kernel on two inputs, through timed()
      (markers 140/141, in this order), after a first call on the second

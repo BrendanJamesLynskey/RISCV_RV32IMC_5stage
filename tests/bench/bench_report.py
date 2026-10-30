@@ -45,7 +45,13 @@ KERNELS = [(0, "fir, cold caches", 64 * 16, "tap"), (2, "fir", 64 * 16, "tap"),
            (110, "lfsr_jump 10^6", 1, "jump"), (112, "lfsr_jump_clmul 10^6", 1, "jump"),
            (114, "rs_syndromes", 255, "byte"), (116, "rs_syndromes_gf", 255, "byte"),
            (118, "rs_chien", 255, "point"), (120, "rs_chien_gf", 255, "point"),
-           (122, "aes_invmix", 256, "byte"), (124, "aes_invmix_gf", 256, "byte")]
+           (122, "aes_invmix", 256, "byte"), (124, "aes_invmix_gf", 256, "byte"),
+           (126, "mlkem_ntt", 896, "bfly"), (128, "mlkem_ntt_mq", 896, "bfly"), (130, "mlkem_ntt_ct", 896, "bfly"),
+           (146, "mlkem_ntt_ct2", 896, "bfly"),
+           (132, "mlkem_invntt", 896, "bfly"), (134, "mlkem_invntt_x", 896, "bfly"),
+           (148, "mlkem_invntt_x2", 896, "bfly"),
+           (136, "mlkem_basemul", 128, "pair"), (138, "mlkem_basemul_x", 128, "pair"),
+           (142, "mlkem_polymul", 1, "poly"), (144, "mlkem_polymul_x", 1, "poly")]
 
 
 def marker(raw):
@@ -56,9 +62,8 @@ def marker(raw):
 
 
 def main():
-    cycles = pipeview.read_pipe(sys.argv[1])
-    _, occupancy = pipeview.rebuild(cycles)
-    lost = pipeview.lost_cycles(cycles, occupancy)
+    cycles = pipeview.read_pipe(sys.argv[1])       # checked by pipeview.py check (run_bench.sh)
+    lost = pipeview.lost_cycles(cycles)
     at, occ = {}, {}
     for c in cycles:
         if c.valid_wb:

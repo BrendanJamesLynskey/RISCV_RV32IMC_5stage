@@ -59,7 +59,8 @@ module brv32p_core #(
 
   assign dmem_stall = (dmem_rd | dmem_wr) & ~dmem_ready;
   assign imem_stall = imem_rd & ~imem_ready;
-  assign mem_stall  = dmem_stall | imem_stall;
+  wire mq_stall;      // mqmul2's first cycle in MEM (mq_unit.v)
+  assign mem_stall  = dmem_stall | imem_stall | mq_stall;
 
   // ════════════════════════════════════════════════════════════════════
   // IF — Instruction Fetch
@@ -402,6 +403,11 @@ module brv32p_core #(
     .result (gf_result)
   );
 
+  // Xbrvdsp: packed modular arithmetic (funct3 110): mq_unit, instantiated
+  // in MEM, forms the products here and reduces them there
+  wire mq_ex  = dsp_ex && raw_ex[14:12] == 3'b110;
+  wire mq_wr_ex = mq_ex && ctrl_ex[`CTRL_REG_WR];
+
   // Zbkb and Zknh: scalar cryptography, one cycle in EX
   wire [31:0] zk_result;
 
@@ -596,10 +602,36 @@ module brv32p_core #(
   wire signed [65:0] mul_p = mul_a * mul_b;
   wire [31:0] mul_result = (md_op_mem == MD_MUL) ? mul_p[31:0] : mul_p[63:32];
 
+  // Xbrvdsp modular arithmetic: products from EX, reduction here in MEM, so
+  // a result is used like a multiply's; mqmul2 takes a second MEM cycle,
+  // holding the pipeline (mq_stall). mq.cfg and mq.zeta update state like
+  // gf.cfg, as they leave EX.
+  wire mq_mem = valid_mem && ctrl_mem[`CTRL_WB_SEL] == WB_DSP &&
+                raw_mem[6:0] == OP_CUSTOM0 && raw_mem[14:12] == 3'b110;
+  wire [31:0] mq_result;
+
+  mq_unit u_mq (
+    .clk        (clk),
+    .rst_n      (rst_n),
+    .update     (mq_ex && !mem_stall && !stall_ex && !flush_mem),
+    .load       (mq_wr_ex && !mem_stall),
+    .funct7_ex  (raw_ex[31:25]),
+    .a_ex       (rs1_fwd),
+    .b_ex       (rs2_fwd),
+    .in_mem     (mq_mem),
+    .hold       (mem_stall),
+    .funct7_mem (raw_mem[31:25]),
+    .a_mem      (rs1_data_mem),
+    .b_mem      (rs2_data_mem),
+    .result_mem (mq_result),
+    .stall      (mq_stall)
+  );
+
   // MEM result
   wire [31:0] mem_result;
   assign mem_result = ctrl_mem[`CTRL_MEM_RD] ? dmem_rdata :
-                      mul_mem                ? mul_result : ex_result_mem;
+                      mul_mem                ? mul_result :
+                      mq_mem                 ? mq_result  : ex_result_mem;
 
   // Trap logic
   wire        irq_pending;
@@ -746,7 +778,7 @@ module brv32p_core #(
     .ex_rd            (rd_addr_ex),
     .ex_reg_wr        (ctrl_ex[`CTRL_REG_WR]),
     .ex_mem_rd        (ctrl_ex[`CTRL_MEM_RD]),
-    .ex_mul           (mul_ex),
+    .ex_mul           (mul_ex || mq_wr_ex),
     .ex_csr           (ctrl_ex[`CTRL_CSR_EN] && ctrl_ex[`CTRL_REG_WR]),
     .ex_wb_sel        (ctrl_ex[`CTRL_WB_SEL]),
     .mem_rd           (rd_addr_mem),

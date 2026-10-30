@@ -448,8 +448,9 @@ Artix-7 on a Digilent Nexys A7-100T; 100 MHz target. Whole SoC, with the 32 KB S
 **Critical path** (18 logic levels, 14.5 ns, 77% routing): from the MEM-stage destination register through
 forwarding into EX, a branch-target add and the mispredict logic, into the ID/EX register. In the run before it
 was fetch (`pc_if` through the I-cache reads and the RV32C alignment into IF/ID, and the next-PC loop), at 15.2 ns.
-The worst path moves between runs; these are all within about 0.7 ns. Fetching, aligning and predicting in one cycle is what limits the
-clock; splitting fetch over two stages is the next step for Fmax.
+The worst path moves between runs. Two limits take turns: fetching, aligning and predicting in one cycle, and
+resolving a branch in EX on forwarded operands. Raising Fmax much further means splitting fetch over two stages
+and taking the branch target off the forwarding path.
 
 The path before this (16.0 ns, at 62.2 MHz) was a CSR read in MEM forwarded combinationally into EX. Its value
 was `mip`, straight from a peripheral's interrupt line, and it passed through a branch target and the mispredict

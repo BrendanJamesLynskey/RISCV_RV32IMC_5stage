@@ -24,7 +24,7 @@ LOCKSTEP="${LOCKSTEP:-1}"
 [ -x "$SPIKE" ] || LOCKSTEP=0
 
 python3 "$HERE/gen_data.py" > "$B/bench_data.h"
-"${CROSS}gcc" -O2 -march="$MARCH" -mabi=ilp32 -static -mcmodel=medany -nostdlib -nostartfiles -ffreestanding \
+"${CROSS}gcc" -O2 -falign-loops=4 -march="$MARCH" -mabi=ilp32 -static -mcmodel=medany -nostdlib -nostartfiles -ffreestanding \
   -I "$B" -I "$HERE" -T "$HERE/link.ld" "$HERE/crt.S" "$HERE/dsp.c" -o "$B/dsp.elf"
 "${CROSS}objcopy" -O binary "$B/dsp.elf" "$B/dsp.bin"
 python3 "$ROOT/tests/isa/elf2hex.py" "$B/dsp.bin" "$B/dsp.hex"

@@ -185,6 +185,24 @@ module decoder (
           ctrl[`CTRL_ILLEGAL] = 1'b1;
       end
 
+      OP_CUSTOM1: begin
+        if (funct3 == 3'b000 && (funct7 == 7'b0000000 || funct7 == 7'b0000001) &&
+            rs2_addr == 5'd0 && rd_addr[4:2] == 3'b000)
+          ;                                           // ar.set, ar.cfg
+        else if ((funct3 == 3'b001 || funct3 == 3'b010 || funct3 == 3'b101) &&
+                 rs1_addr == 5'd0 && instr[31:22] == 10'd0) begin
+          ctrl[`CTRL_MEM_RD]    = 1'b1;               // lh.a, lw.a, lhu.a
+          ctrl[`CTRL_REG_WR]    = 1'b1;
+          ctrl[`CTRL_WB_SEL]    = WB_MEM;
+          ctrl[`CTRL_MEM_WIDTH] = funct3[1:0];
+          ctrl[`CTRL_MEM_SIGN]  = ~funct3[2];
+        end else if (funct3 == 3'b011 && rs1_addr == 5'd0 && instr[31:23] == 9'd0) begin
+          ctrl[`CTRL_REG_WR]    = 1'b1;               // ar.rd, ar.rds
+          ctrl[`CTRL_WB_SEL]    = WB_AGU;
+        end else
+          ctrl[`CTRL_ILLEGAL] = 1'b1;
+      end
+
       default: begin
         ctrl[`CTRL_ILLEGAL] = 1'b1;
       end

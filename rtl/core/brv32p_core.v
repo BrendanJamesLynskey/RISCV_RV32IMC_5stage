@@ -388,6 +388,24 @@ module brv32p_core #(
     .result (dsp_result)
   );
 
+  // Xbrvdsp: address generators. An AGU instruction updates its address
+  // register as it moves from EX to MEM, with the same gating as acc, and not
+  // if the load is misaligned (it traps and runs again after the handler).
+  wire agu_ex      = valid_ex && (raw_ex[6:0] == OP_CUSTOM1) && !ctrl_ex[`CTRL_ILLEGAL];
+  wire agu_load_ex = agu_ex && ctrl_ex[`CTRL_MEM_RD];
+  wire [31:0] agu_addr, agu_result;
+  wire        misaligned_ex;
+
+  agu u_agu (
+    .clk    (clk),
+    .rst_n  (rst_n),
+    .update (agu_ex && !mem_stall && !stall_ex && !flush_mem && !misaligned_ex),
+    .insn   (raw_ex),
+    .a      (rs1_fwd),
+    .addr   (agu_addr),
+    .result (agu_result)
+  );
+
   // Branch resolution
   reg  branch_taken_ex;
   wire [31:0] branch_target_computed;
@@ -436,9 +454,11 @@ module brv32p_core #(
   // Misaligned load or store: the address is known here, the exception is
   // taken when the instruction reaches MEM (the access itself is suppressed)
   wire mem_access_ex = ctrl_ex[`CTRL_MEM_RD] || ctrl_ex[`CTRL_MEM_WR];
-  wire misaligned_ex = mem_access_ex &&
-    ((ctrl_ex[`CTRL_MEM_WIDTH] == 2'd1 && alu_result_ex[0]) ||
-     (ctrl_ex[`CTRL_MEM_WIDTH] == 2'd2 && alu_result_ex[1:0] != 2'b00));
+  // The data address: rs1 + imm from the ALU, or an address register's value
+  wire [31:0] mem_addr_ex = (raw_ex[6:0] == OP_CUSTOM1) ? agu_addr : alu_result_ex;
+  assign misaligned_ex = mem_access_ex &&
+    ((ctrl_ex[`CTRL_MEM_WIDTH] == 2'd1 && mem_addr_ex[0]) ||
+     (ctrl_ex[`CTRL_MEM_WIDTH] == 2'd2 && mem_addr_ex[1:0] != 2'b00));
 
   // FENCE.I (MISC-MEM, funct3 = 001): invalidate the I-cache and refetch the
   // next instruction, so nothing fetched before the fence runs. The D-cache
@@ -465,6 +485,8 @@ module brv32p_core #(
       WB_MULDIV: ex_result = muldiv_result;
       WB_AUIPC:  ex_result = auipc_result;
       WB_DSP:    ex_result = dsp_result;
+      WB_AGU:    ex_result = agu_result;
+      WB_MEM:    ex_result = mem_addr_ex;
       default:   ex_result = alu_result_ex;
     endcase
   end

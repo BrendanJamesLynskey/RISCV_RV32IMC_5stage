@@ -589,7 +589,8 @@ module zk_unit (
   // and XORed into rs1.
   wire [1:0]  bs      = insn[31:30];
   wire [4:0]  aes_op  = insn[29:25];             // 10001 esi, 10011 esmi, 10101 dsi, 10111 dsmi
-  wire [7:0]  aes_in  = b >> {bs, 3'b000};
+  wire [31:0] aes_sh  = b >> {bs, 3'b000};
+  wire [7:0]  aes_in  = aes_sh[7:0];
   wire [7:0]  s_e     = sbox_fwd(aes_in);
   wire [7:0]  s_d     = sbox_inv(aes_in);
   wire [7:0]  s2 = xt(s_e), s3 = xt(s_e) ^ s_e;

@@ -16,7 +16,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 CROSS="${CROSS:-riscv64-unknown-elf-}"
 MARCH="${MARCH:-rv32imc_zicsr}"
-MARCH_ZK="${MARCH}_zbkb_zknh"          # sha256_zk.c only: the plain kernels stay plain
+MARCH_ZK="${MARCH}_zbkb_zknh_zkne_zknd" # the *_zk.c files only: the plain kernels stay plain
 B="$HERE/build"
 mkdir -p "$B"
 
@@ -26,9 +26,11 @@ LOCKSTEP="${LOCKSTEP:-1}"
 
 python3 "$HERE/gen_data.py" > "$B/bench_data.h"
 CFLAGS=(-O2 -falign-loops=4 -mabi=ilp32 -mcmodel=medany -ffreestanding -I "$B" -I "$HERE")
-"${CROSS}gcc" "${CFLAGS[@]}" -march="$MARCH_ZK" -c "$HERE/sha256_zk.c" -o "$B/sha256_zk.o"
+for f in sha256_zk aes_zk; do
+  "${CROSS}gcc" "${CFLAGS[@]}" -march="$MARCH_ZK" -c "$HERE/$f.c" -o "$B/$f.o"
+done
 "${CROSS}gcc" "${CFLAGS[@]}" -march="$MARCH" -static -nostdlib -nostartfiles -T "$HERE/link.ld" \
-  "$HERE/crt.S" "$HERE/dsp.c" "$HERE/sha256.c" "$B/sha256_zk.o" -o "$B/dsp.elf"
+  "$HERE/crt.S" "$HERE/dsp.c" "$HERE/sha256.c" "$HERE/aes.c" "$B/sha256_zk.o" "$B/aes_zk.o" -o "$B/dsp.elf"
 "${CROSS}objcopy" -O binary "$B/dsp.elf" "$B/dsp.bin"
 python3 "$ROOT/tests/isa/elf2hex.py" "$B/dsp.bin" "$B/dsp.hex"
 "${CROSS}objdump" -d "$B/dsp.elf" > "$B/dsp.dis"

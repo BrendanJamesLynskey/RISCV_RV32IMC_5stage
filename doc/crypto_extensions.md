@@ -1,4 +1,4 @@
-# Scalar cryptography: Zbkb and Zknh
+# Scalar cryptography: Zbkb, Zknh, Zkne and Zknd
 
 BRV32P implements part of the **ratified** RISC-V scalar cryptography extensions (Zk), unlike Xbrvdsp, which is
 custom. The standard encodings bring three benefits:
@@ -9,7 +9,7 @@ custom. The standard encodings bring three benefits:
 | Step | Extensions | Status |
 |---|---|---|
 | 1 | **Zbkb** (bit manipulation for cryptography) and **Zknh** (SHA-256 and SHA-512) | **done** |
-| 2 | Zkne/Zknd (AES rounds, `aes32*`) | planned |
+| 2 | **Zkne** and **Zknd** (AES rounds, `aes32*`) | **done** |
 | 3 | Zbkc (carry-less multiply) and Zbkx (crossbar permutations) | planned |
 | 4 | Zkt (data-independent timing): check that these instructions' cycle counts do not depend on the data | planned |
 
@@ -68,3 +68,45 @@ In plain RV32 each σ or Σ function is 9 to 11 instructions: two or three rotat
 an OR), σ's extra shift, and the XORs. With Zknh each is one instruction. The rest of a round is unchanged, which
 bounds the gain: the additions, Ch and Maj, and the message schedule's loads and stores. The big-endian word
 loads are four byte loads and shifts in both builds.
+
+## Step 2: Zkne and Zknd (AES)
+
+| Instruction | Operation (RV32; bs = 0–3, an immediate in bits 31:30) |
+|---|---|
+| `aes32esi rd, rs1, rs2, bs` | rd = rs1 ^ rol(SubBytes(rs2.byte[bs]), 8·bs): a final encryption round |
+| `aes32esmi rd, rs1, rs2, bs` | the same with that byte's column of MixColumns, (2s, s, s, 3s): a middle round |
+| `aes32dsi`, `aes32dsmi` | the same with the inverse S-box, and InvMixColumns' column (14, 9, 13, 11) |
+
+Each instruction does one state byte's work for a round:
+- its S-box;
+- its contribution to a MixColumns column;
+- the XOR into the new column.
+
+So a round is 16 instructions on four 32-bit column words, and ShiftRows costs nothing: it is the choice of
+which word each byte comes from. In `zk_unit.v` these are a forward and an inverse S-box (256-entry case tables,
+generated from the S-box's definition), multiplications by constants in GF(2⁸) (xtime chains), the rotate by
+bs, and an XOR.
+
+Tests (`tests/directed/zk.S`): each of the four instructions with each byte select. The expected values come
+from a Python model, and the run is compared with Spike in lockstep. GCC 13's `__builtin_riscv_aes32*` reject
+the byte-select operand, so the benchmark uses inline asm.
+
+### AES-128 benchmark
+
+Encryption of 256 bytes (16 blocks, ECB) with expanded round keys. The expected ciphertext comes from a Python
+AES that is first checked against the FIPS-197 example (69c4e0d8…c55a).
+
+| Kernel (warm caches) | Cycles | Per byte | Main loss |
+|---|---|---|---|
+| AES-128, byte-oriented C (FIPS-197's form: S-box table, ShiftRows, xtime) | 102,864 | 401.8 | mispredicts 4,590, load-use 2,561 |
+| AES-128, one 1 KB T-table C (the usual fast software form) | 23,775 | 92.9 | D-cache waits 3,965 |
+| **AES-128, Zkne (`aes32esmi`/`aes32esi`)** | **5,031** | **19.7** | — (IPC 0.97) |
+
+Zkne is 4.7× the T-table code and 20× the byte-oriented code. The T-table version is the fair comparison. Four
+1 KB tables would save its rotates but not fit the 2 KB D-cache, and even the single table conflicts in it.
+Its loads also depend on the key and data, which is the cache-timing leak AES instructions remove. The
+instruction version reads only the state, the round keys and the input, at addresses that do not depend on the
+data.
+
+Cost: 489 LUTs (the design went from 9,613 to 10,102) for the two S-boxes, the constant multiplies and the
+selection. There are no registers. The worst path is unchanged in kind: the next-PC loop, at 65.3 MHz in that run.

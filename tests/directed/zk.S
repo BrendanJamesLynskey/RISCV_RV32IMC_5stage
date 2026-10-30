@@ -1,12 +1,13 @@
 /*
- * zk.S — Zbkb and Zknh (ratified scalar cryptography), one case each.
+ * zk.S — Zbkb, Zknh, Zkne and Zknd (ratified scalar cryptography).
  *
  * Every instruction on the same operands (rs1 = 0x8badf00d, rs2 =
  * 0x01234567); the expected values were computed in Python from the
  * specification's formulas, and the run is compared with Spike's own
  * implementation in lockstep. Each result is used by the next instruction
  * (forwarding from EX/MEM). The last cases chain results through rd = rs1,
- * and check zip and unzip are inverses.
+ * and check zip and unzip are inverses. The AES instructions run with each
+ * of the four byte selects.
  */
 
 #include "riscv_test.h"
@@ -151,6 +152,87 @@ RVTEST_CODE_BEGIN
   li      t0, 32 + 1          # only rs2[4:0] counts: rotate right by 1 undoes rori 31
   ror     a1, a0, t0
   bne     a1, s0, fail
+
+  # AES (Zkne, Zknd): each instruction with each byte select
+  li      TESTNUM, 26
+  aes32esi a0, s0, s1, 0
+  li      t1, 0x8badf088
+  bne     a0, t1, fail
+
+  li      TESTNUM, 27
+  aes32esi a0, s0, s1, 1
+  li      t1, 0x8bad9e0d
+  bne     a0, t1, fail
+
+  li      TESTNUM, 28
+  aes32esi a0, s0, s1, 2
+  li      t1, 0x8b8bf00d
+  bne     a0, t1, fail
+
+  li      TESTNUM, 29
+  aes32esi a0, s0, s1, 3
+  li      t1, 0xf7adf00d
+  bne     a0, t1, fail
+
+  li      TESTNUM, 30
+  aes32esmi a0, s0, s1, 0
+  li      t1, 0x1f28751c
+  bne     a0, t1, fail
+
+  li      TESTNUM, 31
+  aes32esmi a0, s0, s1, 1
+  li      t1, 0xe5c32cbf
+  bne     a0, t1, fail
+
+  li      TESTNUM, 32
+  aes32esmi a0, s0, s1, 2
+  li      t1, 0xade19a2b
+  bne     a0, t1, fail
+
+  li      TESTNUM, 33
+  aes32esmi a0, s0, s1, 3
+  li      t1, 0x73298c71
+  bne     a0, t1, fail
+
+  li      TESTNUM, 34
+  aes32dsi a0, s0, s1, 0
+  li      t1, 0x8badf007
+  bne     a0, t1, fail
+
+  li      TESTNUM, 35
+  aes32dsi a0, s0, s1, 1
+  li      t1, 0x8bad980d
+  bne     a0, t1, fail
+
+  li      TESTNUM, 36
+  aes32dsi a0, s0, s1, 2
+  li      t1, 0x8b9ff00d
+  bne     a0, t1, fail
+
+  li      TESTNUM, 37
+  aes32dsi a0, s0, s1, 3
+  li      t1, 0x82adf00d
+  bne     a0, t1, fail
+
+  li      TESTNUM, 38
+  aes32dsmi a0, s0, s1, 0
+  li      t1, 0xc5dfaa61
+  bne     a0, t1, fail
+
+  li      TESTNUM, 39
+  aes32dsmi a0, s0, s1, 1
+  li      t1, 0x35a8f6d8
+  bne     a0, t1, fail
+
+  li      TESTNUM, 40
+  aes32dsmi a0, s0, s1, 2
+  li      t1, 0x328a2d7c
+  bne     a0, t1, fail
+
+  li      TESTNUM, 41
+  aes32dsmi a0, s0, s1, 3
+  li      t1, 0xf5fe954c
+  bne     a0, t1, fail
 
   TEST_PASSFAIL
 

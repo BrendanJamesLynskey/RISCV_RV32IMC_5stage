@@ -1,8 +1,8 @@
 // ============================================================================
-// muldiv.v — Multiply / Divide Unit (RV32M Extension)
+// muldiv.v — Divide Unit (RV32M Extension)
 // ============================================================================
-// Single-cycle multiply, iterative restoring divide (32 steps, plus a done
-// cycle). Stalls the pipeline via 'busy' during the division. The done state
+// Iterative restoring divide (32 steps, plus a done cycle). The multiplies
+// are not done here: they run in MEM (brv32p_core.v), off the forwarding path. Stalls the pipeline via 'busy' during the division. The done state
 // holds its result while 'hold' (a pipeline stall) keeps the instruction in EX.
 // Operands are captured when a division starts, because forwarded operand
 // values are not stable while EX waits.
@@ -24,15 +24,6 @@ module muldiv (
 );
 
   `include "brv32p_defs.vh"
-
-  // ── Multiply (single-cycle) ───────────────────────────────────────────
-  wire signed [63:0] mul_ss;
-  wire signed [63:0] mul_su;
-  wire        [63:0] mul_uu;
-
-  assign mul_ss = $signed(a) * $signed(b);
-  assign mul_su = $signed(a) * $signed({1'b0, b});
-  assign mul_uu = $unsigned(a) * $unsigned(b);
 
   // ── Divide (iterative, 33 cycles) ────────────────────────────────────
   reg        div_active;
@@ -56,24 +47,43 @@ module muldiv (
   wire [32:0] rem_sh = {div_acc[63:32], div_acc[31]};   // remainder shifted, next dividend bit in
   wire [32:0] trial  = rem_sh - {1'b0, divisor_reg};
 
+  wire is_div_op = (op == MD_DIV || op == MD_DIVU || op == MD_REM || op == MD_REMU);
+  wire div_start = start && !div_active && is_div_op;
+
+  // Control: whether a division is running, and how far it has got. Only
+  // this depends on 'kill'.
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      div_active       <= 1'b0;
-      div_count        <= 6'd0;
+      div_active <= 1'b0;
+      div_count  <= 6'd0;
+    end else if (kill) begin
+      div_active <= 1'b0;
+    end else if (div_start) begin
+      div_active <= 1'b1;
+      div_count  <= 6'd0;
+    end else if (div_active) begin
+      if (div_count < 6'd32)
+        div_count <= div_count + 1'b1;
+      else if (!hold)
+        div_active <= 1'b0;       // result taken by the pipeline
+    end
+  end
+
+  // Data: operands captured when a division starts, then one step per cycle.
+  // Not gated by 'kill' (a killed division leaves div_active low, so what
+  // these hold no longer matters). Keeping the flush out of their enables
+  // takes the branch-resolution path off ~140 registers.
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
       div_acc          <= 64'd0;
       divisor_reg      <= 32'd0;
+      dividend         <= 32'd0;
       div_signed_r     <= 1'b0;
       div_rem          <= 1'b0;
       negate_result    <= 1'b0;
       negate_remainder <= 1'b0;
-    end else if (kill) begin
-      div_active       <= 1'b0;
-    end else if (start && !div_active &&
-                 (op == MD_DIV || op == MD_DIVU || op == MD_REM || op == MD_REMU)) begin
-      div_active <= 1'b1;
-      div_count  <= 6'd0;
-      dividend   <= a;      // for the remainder of a division by zero
-
+    end else if (div_start) begin
+      dividend     <= a;        // for the remainder of a division by zero
       div_signed_r <= (op == MD_DIV) || (op == MD_REM);
       div_rem      <= (op == MD_REM) || (op == MD_REMU);
 
@@ -89,19 +99,14 @@ module muldiv (
         negate_result    <= 1'b0;
         negate_remainder <= 1'b0;
       end
-    end else if (div_active) begin
-      if (div_count < 6'd32) begin
-        // Restoring division step. div_acc = {remainder, dividend/quotient}:
-        // shift the next dividend bit into the remainder, then try to
-        // subtract the divisor (33 bits, so a remainder >= 2^31 is safe)
-        if (!trial[32])
-          div_acc <= {trial[31:0], div_acc[30:0], 1'b1};
-        else
-          div_acc <= {rem_sh[31:0], div_acc[30:0], 1'b0};
-        div_count <= div_count + 1'b1;
-      end else if (!hold) begin
-        div_active <= 1'b0;       // result taken by the pipeline
-      end
+    end else if (div_active && div_count < 6'd32) begin
+      // Restoring division step. div_acc = {remainder, dividend/quotient}:
+      // shift the next dividend bit into the remainder, then try to
+      // subtract the divisor (33 bits, so a remainder >= 2^31 is safe)
+      if (!trial[32])
+        div_acc <= {trial[31:0], div_acc[30:0], 1'b1};
+      else
+        div_acc <= {rem_sh[31:0], div_acc[30:0], 1'b0};
     end
   end
 
@@ -122,27 +127,13 @@ module muldiv (
   end
 
   // ── Output MUX ────────────────────────────────────────────────────────
-  wire is_mul;
-  assign is_mul = (op == MD_MUL || op == MD_MULH || op == MD_MULHSU || op == MD_MULHU);
-
-  wire is_div = (op == MD_DIV || op == MD_DIVU || op == MD_REM || op == MD_REMU);
-
   always @(*) begin
     valid  = 1'b0;
     // Busy from the cycle a division starts, so the instruction stays in EX
-    busy   = (start && is_div && !div_active) || (div_active && !div_done);
+    busy   = div_start || (div_active && !div_done);
     result = 32'b0;
 
-    if (start && !div_active && is_mul) begin
-      valid = 1'b1;
-      case (op)
-        MD_MUL:    result = mul_ss[31:0];
-        MD_MULH:   result = mul_ss[63:32];
-        MD_MULHSU: result = mul_su[63:32];
-        MD_MULHU:  result = mul_uu[63:32];
-        default:   result = 32'b0;
-      endcase
-    end else if (div_done) begin
+    if (div_done) begin
       valid  = 1'b1;
       result = div_result;
     end

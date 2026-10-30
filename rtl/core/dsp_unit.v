@@ -10,6 +10,8 @@
 //   funct3 011: acc.rdl rd (funct7 0) = acc[31:0]; acc.rdx rd (1) =
 //               sext(acc[39:32]). With acc.set and acc.seth they give exact
 //               readback and save/restore of all 40 bits.
+//   funct3 100: sadd rd, rs1, rs2 (funct7 0) = sat32(rs1 + rs2);
+//               ssub (funct7 1) = sat32(rs1 - rs2). They do not use acc.
 // round is 2^(sh-1), or 0 when sh is 0. a and b are the forwarded rs1 and
 // rs2; sh is the rs2 field.
 //
@@ -66,8 +68,16 @@ module dsp_unit (
   wire               over16  = shifted >  41'sd32767;
   wire               under16 = shifted < -41'sd32768;
 
+  // Saturating add and subtract: 33-bit result, clamped to 32 bits
+  wire signed [32:0] s_sum = funct7[0] ? ($signed({a[31], a}) - $signed({b[31], b}))
+                                       : ($signed({a[31], a}) + $signed({b[31], b}));
+  wire [31:0] s_sat = (s_sum[32] != s_sum[31]) ? (s_sum[32] ? 32'h8000_0000 : 32'h7FFF_FFFF)
+                                               : s_sum[31:0];
+
   always @(*) begin
-    if (funct3 == 3'b011)
+    if (funct3 == 3'b100)
+      result = s_sat;
+    else if (funct3 == 3'b011)
       result = funct7[0] ? {{24{acc[39]}}, acc[39:32]} : acc[31:0];
     else if (funct3 == 3'b010)
       result = over16 ? 32'h0000_7FFF : under16 ? 32'hFFFF_8000 : {{16{shifted[15]}}, shifted[15:0]};

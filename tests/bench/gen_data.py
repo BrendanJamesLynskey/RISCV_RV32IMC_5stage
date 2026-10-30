@@ -11,10 +11,17 @@ fir:    16-tap low-pass (windowed sinc) in Q15 over 64 outputs. The taps'
         so the dmac kernel can read them as aligned pairs (dsp.c).
 energy: sum of x[i]^2 over 256 Q15 samples, as a 64-bit integer: it needs
         more than 32 bits, which is what a 40-bit DSP accumulator is for.
+biquad: two second-order sections in cascade (a Butterworth low-pass), Q14
+        coefficients, direct form I, over 256 Q15 samples:
+        y = sat16((b0 x + b1 x1 + b2 x2 - a1 y1 - a2 y2 + 2^13) >> 14),
+        summed in the order written. Every partial sum fits in 32 bits.
+mix:    z[i] = sat32(p[i] + q[i]) over 256 Q31 samples, large enough that
+        about a quarter of the sums saturate.
 """
 import math
 
 TAPS, OUTS, NE = 16, 64, 256
+NB, NMIX = 256, 256
 
 
 def lcg(seed):
@@ -44,6 +51,38 @@ def sat16(v):
     return max(-32768, min(32767, v))
 
 
+def sat32(v):
+    return max(-2**31, min(2**31 - 1, v))
+
+
+def butterworth_sections(cutoff=0.1):
+    """Two second-order low-pass sections (4th-order Butterworth, bilinear
+    transform), as (b0, b1, b2, a1, a2) in Q14."""
+    k = math.tan(math.pi * cutoff)
+    out = []
+    for q in (1 / (2 * math.cos(math.pi / 8)), 1 / (2 * math.cos(3 * math.pi / 8))):
+        norm = 1 / (1 + k / q + k * k)
+        b0 = k * k * norm
+        sec = (b0, 2 * b0, b0, 2 * (k * k - 1) * norm, (1 - k / q + k * k) * norm)
+        out.append(tuple(round(c * 16384) for c in sec))
+    return out
+
+
+def biquad(x, sections):
+    for b0, b1, b2, a1, a2 in sections:
+        y, x1, x2, y1, y2 = [], 0, 0, 0, 0
+        for v in x:
+            acc = 0
+            for term in (b0 * v, b1 * x1, b2 * x2, -a1 * y1, -a2 * y2):
+                acc += term
+                assert -2**31 <= acc < 2**31, "biquad partial sum overflows 32 bits"
+            out = sat16((acc + (1 << 13)) >> 14)
+            x2, x1, y2, y1 = x1, v, y1, out
+            y.append(out)
+        x = y
+    return x
+
+
 def main():
     x = q15_samples(OUTS + TAPS - 1, 1)
     h = lowpass(TAPS)
@@ -63,7 +102,23 @@ def main():
     print(arr("fir_h", "int16_t __attribute__((aligned(4)))", h))
     print(arr("fir_expect", "int16_t", y))
     print(arr("energy_x", "int16_t __attribute__((aligned(4)))", e))
-    print(f"static const int64_t energy_expect = {energy}LL;")
+    print(f"static const int64_t energy_expect = {energy}LL;\n")
+
+    sections = butterworth_sections()
+    bx = [v // 2 for v in q15_samples(NB, 11)]          # half scale: headroom for the overshoot
+    by = biquad(bx, sections)
+    print(f"#define BIQUAD_N {NB}\n#define MIX_N {NMIX}\n")
+    print(arr("biquad_c", "int16_t", [c for s in sections for c in s]))
+    print(arr("biquad_x", "int16_t", bx))
+    print(arr("biquad_expect", "int16_t", by))
+    g = lcg(13)
+    mp = [(next(g) << 1) - 2**31 + (next(g) & 1) for _ in range(NMIX)]
+    mq = [(next(g) << 1) - 2**31 + (next(g) & 1) for _ in range(NMIX)]
+    mz = [sat32(a + b) for a, b in zip(mp, mq)]
+    print(arr("mix_p", "int32_t", mp))
+    print(arr("mix_q", "int32_t", mq))
+    print(arr("mix_expect", "int32_t", mz))
+    print(f"/* mix: {sum(1 for a, b in zip(mp, mq) if sat32(a + b) != a + b)} of {NMIX} sums saturate */")
 
 
 if __name__ == "__main__":

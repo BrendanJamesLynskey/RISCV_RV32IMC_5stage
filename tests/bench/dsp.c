@@ -10,6 +10,7 @@
  * number of the first failing check.
  */
 #include <stdint.h>
+#include <limits.h>
 #include "bench.h"
 #include "bench_data.h"
 
@@ -280,6 +281,85 @@ int64_t energy_q15_lp(const int16_t *x, int n)
   return acc_rd40();
 }
 
+/* Biquad cascade, direct form I, Q14 coefficients c[5s..5s+4] =
+   (b0, b1, b2, a1, a2). In place over y (which starts as a copy of x). */
+__attribute__((noipa))
+void biquad_q14(int16_t *y, const int16_t *c, int n, int sections)
+{
+  for (int s = 0; s < sections; s++, c += 5) {
+    int32_t x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (int i = 0; i < n; i++) {
+      int32_t x0 = y[i];
+      int32_t acc = c[0] * x0 + c[1] * x1 + c[2] * x2 - c[3] * y1 - c[4] * y2;
+      acc = (acc + (1 << 13)) >> 14;
+      if (acc > 32767) acc = 32767;
+      if (acc < -32768) acc = -32768;
+      x2 = x1; x1 = x0; y2 = y1; y1 = acc;
+      y[i] = (int16_t)acc;
+    }
+  }
+}
+
+static inline void msu(int32_t a, int32_t b)
+{
+  __asm__ volatile (".insn r CUSTOM_0, 0, 2, x0, %0, %1" :: "r" (a), "r" (b));
+}
+static inline int32_t acc_rdh14(void)        /* sat16((acc + 2^13) >> 14) */
+{
+  int32_t r;
+  __asm__ volatile (".insn r CUSTOM_0, 2, 0, %0, x0, x14" : "=r" (r));
+  return r;
+}
+
+/* The same with mac and msu into the accumulator; acc.rdh rounds, shifts
+   and saturates */
+__attribute__((noipa))
+void biquad_q14_mac(int16_t *y, const int16_t *c, int n, int sections)
+{
+  for (int s = 0; s < sections; s++, c += 5) {
+    int32_t b0 = c[0], b1 = c[1], b2 = c[2], a1 = c[3], a2 = c[4];
+    int32_t x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (int i = 0; i < n; i++) {
+      int32_t x0 = y[i];
+      acc_set(0);
+      mac(b0, x0);
+      mac(b1, x1);
+      mac(b2, x2);
+      msu(a1, y1);
+      msu(a2, y2);
+      int32_t out = acc_rdh14();
+      x2 = x1; x1 = x0; y2 = y1; y1 = out;
+      y[i] = (int16_t)out;
+    }
+  }
+}
+
+/* Saturating Q31 mix */
+__attribute__((noipa))
+void mix_q31(int32_t *z, const int32_t *p, const int32_t *q, int n)
+{
+  for (int i = 0; i < n; i++) {
+    int32_t s;
+    if (__builtin_add_overflow(p[i], q[i], &s))
+      s = p[i] < 0 ? INT32_MIN : INT32_MAX;
+    z[i] = s;
+  }
+}
+
+static inline int32_t sadd(int32_t a, int32_t b)
+{
+  int32_t r;
+  __asm__ (".insn r CUSTOM_0, 4, 0, %0, %1, %2" : "=r" (r) : "r" (a), "r" (b));
+  return r;
+}
+
+__attribute__((noipa))
+void mix_q31_sadd(int32_t *z, const int32_t *p, const int32_t *q, int n)
+{
+  for (int i = 0; i < n; i++)
+    z[i] = sadd(p[i], q[i]);
+}
+
 static int16_t fir_y[FIR_OUTS];
 
 static int fir_ok(void)
@@ -382,6 +462,33 @@ int main(void)
     e = energy_q15_lp(energy_x, ENERGY_N);
     if (r) BENCH_MARK(47); else BENCH_MARK(45);
     if (e != energy_expect) return 15;
+  }
+
+  /* Step 5: biquad and saturating mix, plain C then Xbrvdsp, warm caches
+     (each run once cold first, unmeasured) */
+  static int16_t by[BIQUAD_N];
+  static int32_t mz[MIX_N];
+  for (int k = 0; k < 4; k++) {
+    for (int i = 0; i < BIQUAD_N; i++) by[i] = biquad_x[i];
+    if (k == 1) BENCH_MARK(48);
+    if (k == 3) BENCH_MARK(50);
+    if (k < 2) biquad_q14(by, biquad_c, BIQUAD_N, 2);
+    else       biquad_q14_mac(by, biquad_c, BIQUAD_N, 2);
+    if (k == 1) BENCH_MARK(49);
+    if (k == 3) BENCH_MARK(51);
+    for (int i = 0; i < BIQUAD_N; i++)
+      if (by[i] != biquad_expect[i]) return 16 + k;
+  }
+  for (int k = 0; k < 4; k++) {
+    for (int i = 0; i < MIX_N; i++) mz[i] = 0;
+    if (k == 1) BENCH_MARK(52);
+    if (k == 3) BENCH_MARK(54);
+    if (k < 2) mix_q31(mz, mix_p, mix_q, MIX_N);
+    else       mix_q31_sadd(mz, mix_p, mix_q, MIX_N);
+    if (k == 1) BENCH_MARK(53);
+    if (k == 3) BENCH_MARK(55);
+    for (int i = 0; i < MIX_N; i++)
+      if (mz[i] != mix_expect[i]) return 20 + k;
   }
 
   return 0;

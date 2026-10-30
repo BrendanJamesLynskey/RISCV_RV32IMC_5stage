@@ -15,6 +15,7 @@ project's own.
 | 5a | Saturating add and subtract; biquad IIR and saturating-mix benchmarks | **done** |
 | 5b | Bit-reversed addressing; radix-2 FFT benchmark | **done** |
 | 5c | Packed halving add and subtract, and a pack, for 16-bit pairs (FFT butterflies) | **done** |
+| GF | Packed GF(2⁸) multiply (`gfmul4`, `gf.cfg`, `gf.rd`; custom-0 funct3 101): documented with the finite-field kernels in [finite_fields.md](finite_fields.md) | **done** |
 
 ## Step 1: the multiply-accumulate unit
 

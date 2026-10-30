@@ -171,8 +171,30 @@ plaintexts through the very same call, so that only the data differs:
 | one-table T-table C | 21,079 cycles | 24,044 cycles (D-cache waits 1,287 against 4,264) |
 | Zkne | **5,013** | **5,013** |
 
-Later builds move the data, and with it the T-table times; after the finite-field kernels were added
-([finite_fields.md](finite_fields.md)) they were 22,666 and 20,989 cycles, and the Zkne times 5,014 and 5,014.
+**The harness, corrected.** That first check called each kernel through one call site, but reached it by
+different paths through `main` for the two inputs. Adding the finite-field kernels
+([finite_fields.md](finite_fields.md)) moved the code, and the Zkne runs then took 5,014 and 5,016 cycles: two
+more mispredicts on the second key, from branch-predictor state left by the harness, not from the data. A
+second attempt still differed, by one I-cache miss: GCC unrolls the cold-then-warm loop, so the first warm run
+fetched the warm path's code for the first time. The check now goes through `timed()` in `dsp.c`:
+- it copies each input (and round keys) into the same buffers;
+- it runs the kernel cold, then warm between one marker pair;
+- it is called once on the second input as a warm-up, then on each input.
+
+The two measured calls of one kernel follow exactly the same path and touch the same addresses, so only the
+data differs. With it (latest build):
+
+| 256 bytes, warm caches | input 1 | input 2 |
+|---|---|---|
+| AES-128, one-table T-table C | 20,836 cycles | 20,979 cycles |
+| **AES-128, Zkne** | **5,018** | **5,018** |
+| Reed–Solomon syndromes, exp/log tables | 89,847 | 88,489 |
+| **Reed–Solomon syndromes, `gfmul4`** | **6,221** | **6,221** |
+
+The T-table gap is smaller than before, because the copies put the plaintexts and keys at the same addresses;
+what remains comes from the table lookups. The log-table syndromes branch on a zero value, which the mostly
+zero second word hits more often. `gfmul4` is Xbrvdsp's, not Zkt's, but it is one cycle with no shortcut, like
+the instructions Zkt lists.
 
 The T-table version's loads go to addresses chosen by the key and the data. So its D-cache conflicts, and
 its time, depend on them. That is the cache-timing channel AES instructions exist to close. The Zkne version

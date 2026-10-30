@@ -39,6 +39,14 @@ gf2:    polynomials over GF(2) (gf2.c, gf2_zk.c). Three more CRCs of the
         32 steps apart; its byte table; the state 1,000,000 steps on (the
         jump-ahead kernels), checked by stepping. And xorshift32, for
         comparison.
+gf256:  GF(2^8) (gf256.c, gf256_x.c). Reed-Solomon RS(255,223) over
+        x^8 + x^4 + x^3 + x^2 + 1 (0x11D), generator roots alpha^0..alpha^31:
+        a codeword (checked to have zero syndromes) with 16 byte errors, its
+        32 syndromes, its error locator (Berlekamp-Massey) and the error
+        positions the Chien search must find (checked to be the ones made).
+        A second received word (all-zero message, 16 other errors) for the
+        timing comparison. The exp/log tables. And AES InvMixColumns of 256
+        bytes, by FIPS-197's matrix.
 """
 import hashlib
 import zlib
@@ -245,6 +253,88 @@ def lfsr_step(s):
     return ((s << 1) ^ LFSR_P if s >> 31 else s << 1) & 0xFFFFFFFF
 
 
+def gf_mul(a, b, poly):
+    """a b in GF(2^8) modulo x^8 + poly, bit-serially (as gfmul4 per lane)."""
+    r = 0
+    for k in range(7, -1, -1):
+        r = ((r << 1) & 0xFF) ^ (poly if r & 0x80 else 0)
+        if b >> k & 1:
+            r ^= a
+    return r
+
+
+RS_POLY, RS_NSYM = 0x1D, 32
+RS_EXP = [0] * 510
+RS_LOG = [0] * 256
+_v = 1
+for _i in range(255):
+    RS_EXP[_i], RS_LOG[_v] = _v, _i
+    _v = gf_mul(_v, 2, RS_POLY)
+RS_EXP[255:] = RS_EXP[:255]
+
+
+def rs_mul(a, b):
+    return gf_mul(a, b, RS_POLY)
+
+
+def rs_encode(msg):
+    """Systematic RS(255,223): msg, then the remainder of msg x^32 by g(x).
+    Byte 0 is the coefficient of x^254."""
+    g = [1]
+    for j in range(RS_NSYM):
+        g = [a ^ rs_mul(b, RS_EXP[j]) for a, b in zip(g + [0], [0] + g)]
+    rem = list(msg) + [0] * RS_NSYM
+    for i in range(len(msg)):
+        c = rem[i]
+        for j in range(1, len(g)):
+            rem[i + j] ^= rs_mul(g[j], c)
+    return list(msg) + rem[len(msg):]
+
+
+def rs_syndromes(r):
+    """S_j = r(alpha^j), j = 0..31, by Horner over the bytes."""
+    out = []
+    for j in range(RS_NSYM):
+        s = 0
+        for b in r:
+            s = rs_mul(s, RS_EXP[j]) ^ b
+        out.append(s)
+    return out
+
+
+def rs_locator(S):
+    """Berlekamp-Massey: the error locator Lambda, lowest coefficient first."""
+    C, B, L, m, b = [1] + [0] * RS_NSYM, [1] + [0] * RS_NSYM, 0, 1, 1
+    for n in range(RS_NSYM):
+        d = S[n]
+        for i in range(1, L + 1):
+            d ^= rs_mul(C[i], S[n - i])
+        if d == 0:
+            m += 1
+            continue
+        T, coef = C[:], rs_mul(d, RS_EXP[255 - RS_LOG[b]])
+        for i in range(m, RS_NSYM + 1):
+            C[i] ^= rs_mul(coef, B[i - m])
+        if 2 * L <= n:
+            L, B, b, m = n + 1 - L, T, d, 1
+        else:
+            m += 1
+    return C[:L + 1]
+
+
+def rs_chien(lam):
+    """Byte positions k with Lambda(alpha^(k+1)) = 0: an error at byte k has
+    locator alpha^(254-k), whose inverse is alpha^(k+1)."""
+    roots = []
+    for i in range(1, 256):
+        v = 0
+        for k, c in enumerate(lam):
+            v ^= rs_mul(c, RS_EXP[(k * i) % 255])
+        if v == 0:
+            roots.append(i - 1)
+    return roots
+
+
 def crc_barrett(data):
     """CRC-32 as crc32_zk.c computes it: a word at a time, bit-reversed into
     the normal domain, Barrett reduction by carry-less multiplies."""
@@ -417,6 +507,46 @@ def main():
     print(arr("lfsr_expect", "uint32_t", st))
     print(f"static const uint32_t lfsr_jump_expect = {s:#010x}u;\n")
     print(arr("xs_expect", "uint32_t", xs))
+
+    # gf256: Reed-Solomon, then InvMixColumns
+    gr = lcg(31)
+    cw = rs_encode([next(gr) & 0xFF for _ in range(223)])
+    assert rs_syndromes(cw) == [0] * RS_NSYM, "the RS encoder's codeword has non-zero syndromes"
+
+    def corrupt(c, seed):
+        g2, r, pos = lcg(seed), list(c), []
+        while len(pos) < 16:
+            p = (next(g2) >> 4) % 255
+            if p not in pos:
+                pos.append(p)
+        for p in pos:
+            r[p] ^= 1 + (next(g2) >> 4) % 255
+        return r, sorted(pos)
+    rx, pos = corrupt(cw, 37)
+    rx2, pos2 = corrupt(rs_encode([0] * 223), 41)
+    syn, syn2 = rs_syndromes(rx), rs_syndromes(rx2)
+    lam = rs_locator(syn)
+    assert len(lam) == 17 and rs_chien(lam) == pos, "Berlekamp-Massey and Chien do not find the errors made"
+    print("#define RS_N 255\n#define RS_NSYM 32\n#define RS_ERRS 16\n")
+    print(arr("rs_exp", "uint8_t", RS_EXP))
+    print(arr("rs_log", "uint8_t", RS_LOG))
+    print(arr("rs_rx", "uint8_t __attribute__((aligned(4)))", rx))
+    print(arr("rs_rx2", "uint8_t __attribute__((aligned(4)))", rx2))
+    print(arr("rs_syn_expect", "uint8_t", syn))
+    print(arr("rs_syn2_expect", "uint8_t", syn2))
+    print(arr("rs_lambda", "uint8_t __attribute__((aligned(4)))", lam + [0, 0, 0]))
+    print(arr("rs_pos_expect", "uint8_t", pos))
+    print(arr("rs_alpha", "uint8_t __attribute__((aligned(4)))", RS_EXP[:RS_NSYM]))
+
+    def invmix(st):
+        out = []
+        for c in range(0, len(st), 4):
+            a = st[c:c + 4]
+            out += [aes_gmul(a[i], 14) ^ aes_gmul(a[(i + 1) % 4], 11) ^ aes_gmul(a[(i + 2) % 4], 13) ^
+                    aes_gmul(a[(i + 3) % 4], 9) for i in range(4)]
+        return out
+    assert invmix([0x8e, 0x4d, 0xa1, 0xbc]) == [0xdb, 0x13, 0x53, 0x45], "InvMixColumns model fails"
+    print(arr("aes_invmix_expect", "uint8_t", invmix(list(apt))))
 
 
 if __name__ == "__main__":

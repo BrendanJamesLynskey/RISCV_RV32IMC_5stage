@@ -36,15 +36,16 @@ KERNELS = [(0, "fir, cold caches", 64 * 16, "tap"), (2, "fir", 64 * 16, "tap"),
            (66, "sha256", 256, "byte"), (68, "sha256_zk", 256, "byte"),
            (70, "aes128", 256, "byte"), (74, "aes128_ttable", 256, "byte"), (72, "aes128_zk", 256, "byte"),
            (76, "crc32_table", 256, "byte"), (78, "crc32_clmul", 256, "byte"),
-           (80, "zkt: ttable, key 1", 256, "byte"), (82, "zkt: ttable, key 2", 256, "byte"),
-           (84, "zkt: zk, key 1", 256, "byte"), (86, "zkt: zk, key 2", 256, "byte"),
            (88, "crc32_bitwise", 256, "byte"),
            (90, "crc32c_table", 256, "byte"), (92, "crc32c_clmul", 256, "byte"),
            (94, "crc16_table", 256, "byte"), (96, "crc16_clmul", 256, "byte"),
            (98, "crc8_table", 256, "byte"), (100, "crc8_clmul", 256, "byte"),
            (102, "lfsr_bitwise", 64, "word"), (104, "lfsr_table", 64, "word"),
            (106, "lfsr_clmul", 64, "word"), (108, "xorshift32", 64, "word"),
-           (110, "lfsr_jump 10^6", 1, "jump"), (112, "lfsr_jump_clmul 10^6", 1, "jump")]
+           (110, "lfsr_jump 10^6", 1, "jump"), (112, "lfsr_jump_clmul 10^6", 1, "jump"),
+           (114, "rs_syndromes", 255, "byte"), (116, "rs_syndromes_gf", 255, "byte"),
+           (118, "rs_chien", 255, "point"), (120, "rs_chien_gf", 255, "point"),
+           (122, "aes_invmix", 256, "byte"), (124, "aes_invmix_gf", 256, "byte")]
 
 
 def marker(raw):
@@ -58,12 +59,13 @@ def main():
     cycles = pipeview.read_pipe(sys.argv[1])
     _, occupancy = pipeview.rebuild(cycles)
     lost = pipeview.lost_cycles(cycles, occupancy)
-    at = {}
+    at, occ = {}, {}
     for c in cycles:
         if c.valid_wb:
             m = marker(c.raw_wb)
             if m is not None:
                 at.setdefault(m, c.n)
+                occ.setdefault(m, []).append(c.n)
     print(f"{'kernel':<22}{'cycles':>8}{'instrs':>8}{'IPC':>7}{'cycles/unit':>16}   cycles that retired nothing, by cause")
     for begin, name, units, unit in KERNELS:
         if begin not in at or begin + 1 not in at:
@@ -76,16 +78,26 @@ def main():
         lost_s = ", ".join(f"{k} {v}" for k, v in causes.most_common())
         print(f"{name:<22}{n_cyc:>8}{retired:>8}{retired / n_cyc:>7.2f}{n_cyc / units:>11.2f}/{unit:<6}  {lost_s}")
 
-    # Zkt-style check: the Zkne AES must take the same cycles for both keys
-    # and plaintexts (the T-table AES, for contrast, need not)
-    if all(m in at for m in (80, 81, 82, 83, 84, 85, 86, 87)):
-        t1, t2 = at[81] - at[80], at[83] - at[82]
-        z1, z2 = at[85] - at[84], at[87] - at[86]
-        print(f"\ntiming against the data, two keys and plaintexts: T-table AES {t1} and {t2} cycles; "
-              f"Zkne AES {z1} and {z2} cycles: {'equal' if z1 == z2 else 'DIFFERENT'}")
-        if z1 != z2:
+    # Timing against the data (Zkt): timed() in dsp.c runs each kernel three
+    # times between markers 140 and 141: a warm-up, then the two inputs. The
+    # constant-time kernels must take the same cycles on both; the
+    # table-driven ones, for contrast, need not.
+    t3 = [b - a for a, b in zip(occ.get(140, []), occ.get(141, []))]
+    t = [c for i, c in enumerate(t3) if i % 3]
+    if len(t3) == 12:
+        print()
+        bad = False
+        for (name, ct), (c1, c2) in zip([("T-table AES", False), ("Zkne AES", True),
+                                         ("log-table RS syndromes", False), ("gfmul4 RS syndromes", True)],
+                                        zip(t[0::2], t[1::2])):
+            verdict = ("equal" if c1 == c2 else "DIFFERENT") if ct else "may differ"
+            print(f"timing against the data, two inputs: {name:<24}{c1:>7} and {c2:>7} cycles  {verdict}")
+            bad |= ct and c1 != c2
+        if bad:
             sys.exit(1)
-
+    else:
+        print(f"timing check: expected 12 timed runs, found {len(t3)}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

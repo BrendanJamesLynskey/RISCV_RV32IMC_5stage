@@ -388,6 +388,20 @@ module brv32p_core #(
     .result (dsp_result)
   );
 
+  // Xbrvdsp: packed GF(2^8) multiply (funct3 101); gf.cfg updates poly
+  // like a MAC updates acc
+  wire [31:0] gf_result;
+
+  gf_unit u_gf (
+    .clk    (clk),
+    .rst_n  (rst_n),
+    .update (dsp_ex && raw_ex[14:12] == 3'b101 && !mem_stall && !stall_ex && !flush_mem),
+    .funct7 (raw_ex[31:25]),
+    .a      (rs1_fwd),
+    .b      (rs2_fwd),
+    .result (gf_result)
+  );
+
   // Zbkb and Zknh: scalar cryptography, one cycle in EX
   wire [31:0] zk_result;
 
@@ -513,7 +527,8 @@ module brv32p_core #(
       WB_PC4:    ex_result = pc_ex + pc_inc_ex;
       WB_MULDIV: ex_result = muldiv_result;
       WB_AUIPC:  ex_result = auipc_result;
-      WB_DSP:    ex_result = (raw_ex[6:0] == OP_CUSTOM0) ? dsp_result : zk_result;
+      WB_DSP:    ex_result = (raw_ex[6:0] != OP_CUSTOM0)  ? zk_result :
+                             (raw_ex[14:12] == 3'b101) ? gf_result : dsp_result;
       WB_AGU:    ex_result = (raw_ex[23:22] == 2'b10) ? loop_result : agu_result;   // lp.rd : ar.rd*
       WB_MEM:    ex_result = mem_addr_ex;
       default:   ex_result = alu_result_ex;

@@ -1,6 +1,6 @@
 // xbrvdsp.cc — Spike model of Xbrvdsp, BRV32P's DSP extension (step 1:
 // the multiply-accumulate unit; step 2: address generators; step 4: the
-// hardware loop). Loaded with
+// hardware loop; and the packed GF(2^8) multiply). Loaded with
 //   spike --extlib=libxbrvdsp.so --extension=xbrvdsp ...
 // so that programs using the extension run in lockstep with the RTL.
 // Specification: doc/dsp_extension.md.
@@ -21,6 +21,11 @@
 //   radd16 rd, rs1, rs2  funct7 0000010, funct3 100  per 16-bit half: (rs1 + rs2) >> 1
 //   rsub16 rd, rs1, rs2  funct7 0000011, funct3 100  per half: (rs1 - rs2) >> 1
 //   pk16 rd, rs1, rs2    funct7 0000100, funct3 100  rd = {rs1[15:0], rs2[15:0]}
+//   gfmul4 rd, rs1, rs2  funct7 0000000, funct3 101  per byte: rs1 * rs2 in GF(2^8)
+//                                                   modulo x^8 + poly
+//   gf.cfg rs1           funct7 0000001, funct3 101, rd 0, rs2 0   poly = rs1[7:0]
+//   gf.rd  rd            funct7 0000010, funct3 101, rs1 0, rs2 0  rd = poly
+// poly resets to 0x1D.
 // lo/hi are the signed 16-bit halves; sh is the rs2 field (0-31); rnd is
 // 2^(sh-1), or 0 when sh is 0.
 //
@@ -64,6 +69,7 @@ static uint32_t ar_addr[4];
 static int16_t  ar_stride[4];
 static bool     ar_br[4];
 static uint32_t lc, lp_start;
+static uint8_t  gf_poly = 0x1D;
 
 static reg_t loop_next(reg_t pc)          // after a loop-end instruction
 {
@@ -193,6 +199,37 @@ static reg_t x_rsub16(processor_t* p, insn_t insn, reg_t pc)
 static reg_t x_pk16(processor_t* p, insn_t insn, reg_t pc)
 {
   WRITE_RD(sext32(((RS1 & 0xFFFF) << 16) | (RS2 & 0xFFFF)));
+  return pc + 4;
+}
+
+static uint8_t gf_mul(uint8_t a, uint8_t b)
+{
+  uint8_t r = 0;
+  for (int k = 7; k >= 0; k--) {
+    r = (uint8_t)((r << 1) ^ (r & 0x80 ? gf_poly : 0));
+    if (b & (1u << k)) r ^= a;
+  }
+  return r;
+}
+
+static reg_t x_gfmul4(processor_t* p, insn_t insn, reg_t pc)
+{
+  uint32_t a = (uint32_t)RS1, b = (uint32_t)RS2, r = 0;
+  for (int i = 0; i < 32; i += 8)
+    r |= (uint32_t)gf_mul((uint8_t)(a >> i), (uint8_t)(b >> i)) << i;
+  WRITE_RD(sext32(r));
+  return pc + 4;
+}
+
+static reg_t x_gf_cfg(processor_t* p, insn_t insn, reg_t pc)
+{
+  gf_poly = (uint8_t)RS1;
+  return pc + 4;
+}
+
+static reg_t x_gf_rd(processor_t* p, insn_t insn, reg_t pc)
+{
+  WRITE_RD(gf_poly);
   return pc + 4;
 }
 
@@ -370,6 +407,9 @@ class xbrvdsp_t : public extension_t
       {0x0400400B, 0xFE00707F, ALL(x_radd16)},
       {0x0600400B, 0xFE00707F, ALL(x_rsub16)},
       {0x0800400B, 0xFE00707F, ALL(x_pk16)},
+      {0x0000500B, 0xFE00707F, ALL(x_gfmul4)},
+      {0x0200500B, 0xFFF07FFF, ALL(x_gf_cfg)},
+      {0x0400500B, 0xFFFFF07F, ALL(x_gf_rd)},
       {0x8000000B, 0xFE007FFF, ALL(x_mac_lp)},
       {0x8200000B, 0xFE007FFF, ALL(x_dmac_lp)},
       {0x8400000B, 0xFE007FFF, ALL(x_msu_lp)},
@@ -405,6 +445,9 @@ class xbrvdsp_t : public extension_t
       new disasm_insn_t("radd16",  0x0400400B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
       new disasm_insn_t("rsub16",  0x0600400B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
       new disasm_insn_t("pk16",    0x0800400B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
+      new disasm_insn_t("gfmul4",  0x0000500B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
+      new disasm_insn_t("gf.cfg",  0x0200500B, 0xFFF07FFF, {&xrs1}),
+      new disasm_insn_t("gf.rd",   0x0400500B, 0xFFFFF07F, {&xrd}),
       new disasm_insn_t("mac.lp",  0x8000000B, 0xFE007FFF, {&xrs1, &xrs2}),
       new disasm_insn_t("dmac.lp", 0x8200000B, 0xFE007FFF, {&xrs1, &xrs2}),
       new disasm_insn_t("msu.lp",  0x8400000B, 0xFE007FFF, {&xrs1, &xrs2}),
@@ -423,6 +466,7 @@ class xbrvdsp_t : public extension_t
     for (int i = 0; i < 4; i++) { ar_addr[i] = 0; ar_stride[i] = 0; ar_br[i] = false; }
     lc = 0;
     lp_start = 0;
+    gf_poly = 0x1D;
   }
 };
 

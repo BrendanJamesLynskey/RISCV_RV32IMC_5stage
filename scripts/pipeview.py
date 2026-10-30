@@ -273,6 +273,8 @@ def xbrvdsp(raw):
         if f3 == 4:
             names = {0: "sadd", 1: "ssub", 2: "radd16", 3: "rsub16", 4: "pk16"}
             return f"{names[f7]} {rd},{rs1},{rs2}" if f7 in names else None
+        if f3 == 5:
+            return {0: f"gfmul4 {rd},{rs1},{rs2}", 1: f"gf.cfg {rs1}", 2: f"gf.rd {rd}"}.get(f7)
     if op == 0x2B:
         n = (raw >> 7) & 3
         if f3 == 0:

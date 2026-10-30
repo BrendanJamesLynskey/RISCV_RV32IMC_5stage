@@ -504,7 +504,7 @@ module brv32p_core #(
       WB_MULDIV: ex_result = muldiv_result;
       WB_AUIPC:  ex_result = auipc_result;
       WB_DSP:    ex_result = dsp_result;
-      WB_AGU:    ex_result = raw_ex[23] ? loop_result : agu_result;   // lp.rd : ar.rd
+      WB_AGU:    ex_result = (raw_ex[23:22] == 2'b10) ? loop_result : agu_result;   // lp.rd : ar.rd*
       WB_MEM:    ex_result = mem_addr_ex;
       default:   ex_result = alu_result_ex;
     endcase

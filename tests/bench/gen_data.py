@@ -17,11 +17,19 @@ biquad: two second-order sections in cascade (a Butterworth low-pass), Q14
         summed in the order written. Every partial sum fits in 32 bits.
 mix:    z[i] = sat32(p[i] + q[i]) over 256 Q31 samples, large enough that
         about a quarter of the sums saturate.
+fft:    64-point complex radix-2 decimation-in-time FFT, Q15, each sample a
+        word (re in the low half, im in the high). Bit-reversed copy, then 6
+        stages; each butterfly computes t = b * w as
+        tr = sat16((br wr - bi wi + 2^14) >> 15), ti = sat16((br wi + bi wr + 2^14) >> 15)
+        and outputs (a + t) >> 1, (a - t) >> 1, so the result is DFT / 64.
+        Twiddles w = exp(-2 pi i k / 64), Q15, clamped to +-32767. Inputs are at
+        a quarter of full scale, so no intermediate value overflows 16 bits.
 """
 import math
 
 TAPS, OUTS, NE = 16, 64, 256
 NB, NMIX = 256, 256
+NFFT = 64
 
 
 def lcg(seed):
@@ -66,6 +74,34 @@ def butterworth_sections(cutoff=0.1):
         sec = (b0, 2 * b0, b0, 2 * (k * k - 1) * norm, (1 - k / q + k * k) * norm)
         out.append(tuple(round(c * 16384) for c in sec))
     return out
+
+
+def fft_twiddles(n):
+    def q15(v):
+        return max(-32767, min(32767, round(v * 32768)))   # symmetric, so -w fits too
+    return [(q15(math.cos(2 * math.pi * k / n)), q15(-math.sin(2 * math.pi * k / n))) for k in range(n // 2)]
+
+
+def fft_q15(x, tw):
+    """x: list of (re, im); the integer algorithm dsp.c runs."""
+    n = len(x)
+    bits = n.bit_length() - 1
+    y = [x[int(format(i, f"0{bits}b")[::-1], 2)] for i in range(n)]
+    length = 2
+    while length <= n:
+        half, step = length // 2, n // length
+        for start in range(0, n, length):
+            for j in range(half):
+                wr, wi = tw[j * step]
+                (ar, ai), (br, bi) = y[start + j], y[start + j + half]
+                tr = sat16((br * wr - bi * wi + (1 << 14)) >> 15)
+                ti = sat16((br * wi + bi * wr + (1 << 14)) >> 15)
+                for v in (ar + tr, ai + ti, ar - tr, ai - ti):
+                    assert -32768 <= v >> 1 <= 32767
+                y[start + j] = ((ar + tr) >> 1, (ai + ti) >> 1)
+                y[start + j + half] = ((ar - tr) >> 1, (ai - ti) >> 1)
+        length *= 2
+    return y
 
 
 def biquad(x, sections):
@@ -118,7 +154,22 @@ def main():
     print(arr("mix_p", "int32_t", mp))
     print(arr("mix_q", "int32_t", mq))
     print(arr("mix_expect", "int32_t", mz))
-    print(f"/* mix: {sum(1 for a, b in zip(mp, mq) if sat32(a + b) != a + b)} of {NMIX} sums saturate */")
+    print(f"/* mix: {sum(1 for a, b in zip(mp, mq) if sat32(a + b) != a + b)} of {NMIX} sums saturate */\n")
+
+    def word(re, im):
+        return ((im & 0xFFFF) << 16) | (re & 0xFFFF)
+    tw = fft_twiddles(NFFT)
+    fs = q15_samples(2 * NFFT, 17)
+    fx = [(fs[2 * i] // 4, fs[2 * i + 1] // 4) for i in range(NFFT)]
+    fy = fft_q15(fx, tw)
+    print(f"#define FFT_N {NFFT}\n")
+    print(arr("fft_x", "uint32_t __attribute__((aligned(256)))", [word(*v) for v in fx]))
+    print(arr("fft_expect", "uint32_t", [word(*v) for v in fy]))
+    print(arr("fft_wr", "int16_t", [w[0] for w in tw]))
+    print(arr("fft_wi", "int16_t", [w[1] for w in tw]))
+    # Packed for dmac: (wr, -wi) gives br wr - bi wi; (wi, wr) gives br wi + bi wr
+    print(arr("fft_wa", "uint32_t", [word(wr, -wi) for wr, wi in tw]))
+    print(arr("fft_wb", "uint32_t", [word(wi, wr) for wr, wi in tw]))
 
 
 if __name__ == "__main__":

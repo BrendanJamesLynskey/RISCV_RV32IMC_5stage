@@ -38,7 +38,7 @@ declare -A MARCH=( [rv32ui]=rv32i_zicsr_zifencei [rv32um]=rv32im_zicsr_zifencei 
 # "directed" holds this repo's own tests (tests/directed): behaviour the
 # upstream user-level suites cannot see (FENCE.I on cached code, misaligned
 # access traps, interrupts).
-MARCH[directed]=rv32imc_zicsr_zifencei
+MARCH[directed]=rv32imc_zicsr_zifencei_zbkb_zknh
 declare -A SRC=( [rv32ui]="$RISCV_TESTS/isa/rv32ui" [rv32um]="$RISCV_TESTS/isa/rv32um" [rv32uc]="$RISCV_TESTS/isa/rv32uc"
                  [rv32ui-c]="$RISCV_TESTS/isa/rv32ui" [rv32um-c]="$RISCV_TESTS/isa/rv32um" [directed]="$ROOT/tests/directed" )
 SUITES=(rv32ui rv32um rv32uc rv32ui-c rv32um-c directed)

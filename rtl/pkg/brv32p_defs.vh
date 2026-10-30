@@ -77,7 +77,7 @@ localparam [2:0] WB_PC4    = 3'd2;
 localparam [2:0] WB_CSR    = 3'd3;
 localparam [2:0] WB_MULDIV = 3'd4;
 localparam [2:0] WB_AUIPC  = 3'd5;
-localparam [2:0] WB_DSP    = 3'd6;   // acc.rd / acc.rdh
+localparam [2:0] WB_DSP    = 3'd6;   // an extension unit's result: dsp_unit (custom-0) or zk_unit
 localparam [2:0] WB_AGU    = 3'd7;   // ar.rd / ar.rds
 
 // ── Memory access width ──────────────────────────────────────────────

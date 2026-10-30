@@ -24,7 +24,9 @@ fft:    64-point complex radix-2 decimation-in-time FFT, Q15, each sample a
         and outputs (a + t) >> 1, (a - t) >> 1, so the result is DFT / 64.
         Twiddles w = exp(-2 pi i k / 64), Q15, clamped to +-32767. Inputs are at
         a quarter of full scale, so no intermediate value overflows 16 bits.
+sha256: the digest of a 256-byte message (hashlib), as eight words.
 """
+import hashlib
 import math
 
 TAPS, OUTS, NE = 16, 64, 256
@@ -170,6 +172,13 @@ def main():
     # Packed for dmac: (wr, -wi) gives br wr - bi wi; (wi, wr) gives br wi + bi wr
     print(arr("fft_wa", "uint32_t", [word(wr, -wi) for wr, wi in tw]))
     print(arr("fft_wb", "uint32_t", [word(wi, wr) for wr, wi in tw]))
+
+    gm = lcg(19)
+    msg = bytes(next(gm) & 0xFF for _ in range(256))
+    dig = hashlib.sha256(msg).digest()
+    print(f"\n#define SHA_LEN {len(msg)}\n")
+    print(arr("sha_msg", "uint8_t", list(msg)))
+    print(arr("sha_expect", "uint32_t", [int.from_bytes(dig[i:i + 4], "big") for i in range(0, 32, 4)]))
 
 
 if __name__ == "__main__":

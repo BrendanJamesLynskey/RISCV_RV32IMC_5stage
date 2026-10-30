@@ -388,6 +388,16 @@ module brv32p_core #(
     .result (dsp_result)
   );
 
+  // Zbkb and Zknh: scalar cryptography, one cycle in EX
+  wire [31:0] zk_result;
+
+  zk_unit u_zk (
+    .insn   (raw_ex),
+    .a      (rs1_fwd),
+    .b      (rs2_fwd),
+    .result (zk_result)
+  );
+
   // Xbrvdsp: address generators. An AGU instruction updates its address
   // register as it moves from EX to MEM, with the same gating as acc, and not
   // if the load is misaligned (it traps and runs again after the handler).
@@ -503,7 +513,7 @@ module brv32p_core #(
       WB_PC4:    ex_result = pc_ex + pc_inc_ex;
       WB_MULDIV: ex_result = muldiv_result;
       WB_AUIPC:  ex_result = auipc_result;
-      WB_DSP:    ex_result = dsp_result;
+      WB_DSP:    ex_result = (raw_ex[6:0] == OP_CUSTOM0) ? dsp_result : zk_result;
       WB_AGU:    ex_result = (raw_ex[23:22] == 2'b10) ? loop_result : agu_result;   // lp.rd : ar.rd*
       WB_MEM:    ex_result = mem_addr_ex;
       default:   ex_result = alu_result_ex;

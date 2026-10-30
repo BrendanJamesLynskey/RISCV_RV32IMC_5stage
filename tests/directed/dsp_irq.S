@@ -10,7 +10,10 @@
  * points at one), and the test requires some, so the case is really hit.
  * The second part does the same for the address generators: 50 passes of 64
  * lw.a over a table; after each pass the address register must be exactly
- * one table length on, and the sum exact.
+ * one table length on, and the sum exact. The third runs the same table
+ * through a hardware loop of lw.a and dmac.lp, 40 times: an interrupt taken at
+ * the dmac.lp must neither add nor count down, so each pass must end with
+ * lc = 0, the address register one table length on, and the sum exact.
  * (Spike has no timer, so this test checks itself and runs without
  * lockstep.)
  */
@@ -29,6 +32,10 @@
 #define AR_CFG(n, rs) .insn r CUSTOM_1, 0, 1, x##n, rs, x0
 #define LW_A(rd, n)   .insn i CUSTOM_1, 2, rd, x0, n
 #define AR_RD(rd, n)  .insn i CUSTOM_1, 3, rd, x0, n
+#define LP_SETUP(rs)  .insn i CUSTOM_1, 6, x0, rs, 0
+#define LP_RD(rd)     .insn i CUSTOM_1, 3, rd, x0, 8
+#define DMAC_LP(a, b) .insn r CUSTOM_0, 0, 0x41, x0, a, b
+#define ACC_RDL(d)    .insn r CUSTOM_0, 3, 0, d, x0, x0
 
 RVTEST_RV32U
 RVTEST_CODE_BEGIN
@@ -39,6 +46,7 @@ RVTEST_CODE_BEGIN
   li      s3, 0                   # interrupts with the wrong mcause
   li      s4, 0                   # interrupts taken at a MAC
   li      s5, 0                   # interrupts taken at an lw.a
+  li      s10, 0                  # interrupts taken at a dmac.lp
   ACC_SET(x0)
 
   # Timer: prescaler 0, compare 40, auto-reload, enabled
@@ -127,6 +135,41 @@ RVTEST_CODE_BEGIN
   li      t1, 5
   blt     s5, t1, fail
 
+  # Third part: 40 passes of a hardware loop, lw.a then dmac.lp, over the
+  # table (each word's square: 1^2 + ... + 64^2 = 89440 a pass)
+  li      TESTNUM, 10
+  csrsi   mstatus, MSTATUS_MIE
+  li      t0, 4
+  AR_CFG(2, t0)
+  ACC_SET(x0)
+  li      s6, 40
+  .option push
+  .option norvc
+7:
+  AR_SET(2, s9)
+  li      t0, 64
+  LP_SETUP(t0)
+  LW_A(a1, 2)
+  DMAC_LP(a1, a1)
+  LP_RD(a0)                       # the loop has finished
+  bnez    a0, fail
+  AR_RD(a0, 2)                    # exactly one table length on
+  addi    t1, s9, 256
+  bne     a0, t1, fail
+  addi    s6, s6, -1
+  bnez    s6, 7b
+  .option pop
+  csrci   mstatus, MSTATUS_MIE
+
+  li      TESTNUM, 11             # every MAC counted exactly once: 40 x 89440
+  ACC_RDL(a0)
+  li      t1, 3577600
+  bne     a0, t1, fail
+
+  li      TESTNUM, 12             # some interrupts were taken at the dmac.lp
+  li      t1, 5
+  blt     s10, t1, fail
+
   TEST_PASSFAIL
 
   .align  2
@@ -136,12 +179,15 @@ handler:
   beq     t5, t6, 2f
   addi    s3, s3, 1
 2:
-  csrr    t5, mepc                # was the interrupted instruction a MAC?
-  lhu     t5, 0(t5)             # the opcode is in the first halfword; mepc may be 2 mod 4
+  csrr    t4, mepc                # was the interrupted instruction a MAC?
+  lhu     t5, 0(t4)               # the opcode is in the first halfword; mepc may be 2 mod 4
   andi    t5, t5, 0x7f
   li      t6, 0x0b                # custom-0
   bne     t5, t6, 6f
   addi    s4, s4, 1
+  lhu     t6, 2(t4)               # funct7 bit 6 (insn bit 31): a loop end
+  srli    t6, t6, 15
+  add     s10, s10, t6
 6:
   li      t6, 0x2b                # custom-1
   bne     t5, t6, 3f

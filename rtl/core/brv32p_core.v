@@ -380,7 +380,7 @@ module brv32p_core #(
     .clk    (clk),
     .rst_n  (rst_n),
     .update (dsp_ex && !mem_stall && !stall_ex && !flush_mem),
-    .funct7 (raw_ex[31:25]),
+    .funct7 ({1'b0, raw_ex[30:25]}),   // bit 6 marks a loop end (loop_unit.v)
     .funct3 (raw_ex[14:12]),
     .a      (rs1_fwd),
     .b      (rs2_fwd),
@@ -406,6 +406,25 @@ module brv32p_core #(
     .result (agu_result)
   );
 
+  // Xbrvdsp: the hardware loop. A loop-end instruction resolves in EX like a
+  // branch (below): taken while lc > 1, to lp_start.
+  wire        loop_end_ex, loop_back_ex;
+  wire [31:0] loop_start, loop_result;
+
+  loop_unit u_loop (
+    .clk       (clk),
+    .rst_n     (rst_n),
+    .update    (valid_ex && !ctrl_ex[`CTRL_ILLEGAL] && !mem_stall && !stall_ex && !flush_mem),
+    .valid     (valid_ex && !ctrl_ex[`CTRL_ILLEGAL]),
+    .insn      (raw_ex),
+    .pc        (pc_ex),
+    .a         (rs1_fwd),
+    .loop_end  (loop_end_ex),
+    .loop_back (loop_back_ex),
+    .start     (loop_start),
+    .result    (loop_result)
+  );
+
   // Branch resolution
   reg  branch_taken_ex;
   wire [31:0] branch_target_computed;
@@ -423,16 +442,16 @@ module brv32p_core #(
     endcase
   end
 
-  assign branch_target_computed = ctrl_ex[`CTRL_JALR] ?
-    {alu_result_ex[31:1], 1'b0} : (pc_ex + imm_ex);
+  assign branch_target_computed = loop_end_ex        ? loop_start :
+                                  ctrl_ex[`CTRL_JALR] ? {alu_result_ex[31:1], 1'b0} : (pc_ex + imm_ex);
 
   // Mispredict detection
   wire is_branch_or_jump;
   assign is_branch_or_jump = (ctrl_ex[`CTRL_BR_TYPE] != BR_NONE) ||
-                              ctrl_ex[`CTRL_JAL] || ctrl_ex[`CTRL_JALR];
+                              ctrl_ex[`CTRL_JAL] || ctrl_ex[`CTRL_JALR] || loop_end_ex;
 
   wire actual_taken;
-  assign actual_taken = branch_taken_ex || ctrl_ex[`CTRL_JAL] || ctrl_ex[`CTRL_JALR];
+  assign actual_taken = branch_taken_ex || ctrl_ex[`CTRL_JAL] || ctrl_ex[`CTRL_JALR] || loop_back_ex;
 
   // Redirects (mispredict here, MRET below, traps in MEM) act only on a cycle
   // when the pipeline advances. During a memory stall the EX and MEM
@@ -468,9 +487,9 @@ module brv32p_core #(
   assign icache_invalidate = fencei_take;
 
   // Branch predictor update
-  assign bp_update_en     = !mem_stall && (ctrl_ex[`CTRL_BR_TYPE] != BR_NONE);  // once per branch
+  assign bp_update_en     = !mem_stall && ((ctrl_ex[`CTRL_BR_TYPE] != BR_NONE) || loop_end_ex);  // once per branch
   assign bp_update_pc     = pc_ex;
-  assign bp_update_taken  = branch_taken_ex;
+  assign bp_update_taken  = branch_taken_ex || loop_back_ex;
   assign bp_update_target = branch_target_computed;
 
   // MRET
@@ -485,7 +504,7 @@ module brv32p_core #(
       WB_MULDIV: ex_result = muldiv_result;
       WB_AUIPC:  ex_result = auipc_result;
       WB_DSP:    ex_result = dsp_result;
-      WB_AGU:    ex_result = agu_result;
+      WB_AGU:    ex_result = raw_ex[23] ? loop_result : agu_result;   // lp.rd : ar.rd
       WB_MEM:    ex_result = mem_addr_ex;
       default:   ex_result = alu_result_ex;
     endcase

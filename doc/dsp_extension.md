@@ -11,7 +11,7 @@ project's own.
 | 1 | Multiply-accumulate: `mac`, `dmac`, `msu`, accumulator access | **done** |
 | 2 | Address generators: loads that step a pointer register (bit-reversed addressing comes with the FFT, step 5) | **done** |
 | 3 | Two taps per `dmac` in the FIR, from aligned word loads (software only: no new hardware was needed) | **done** |
-| 4 | Zero-overhead hardware loop | planned |
+| 4 | Hardware loop: the loop-back folded into the body's last instruction (`dmac.lp`, `lp.end`) | **done** |
 | 5 | Saturating add and subtract; bit-reversed addressing; biquad IIR and radix-2 FFT benchmarks | planned |
 
 ## Step 1: the multiply-accumulate unit
@@ -189,3 +189,74 @@ The inner loop is four `lw.a`, two `dmac`, the count and the branch: 8 instructi
 outputs). About a third of the cycles are now the per-output overhead: setting up the address registers,
 reading the result, and the inner loop's exit mispredict. The hardware loop of step 4 removes the count, the
 branch and the mispredict.
+
+## Step 4: the hardware loop
+
+### State and instructions
+
+`lc`, the loop count, and `lp_start`, the address where the body begins. Both reset to 0.
+
+| Instruction | Encoding | Operation |
+|---|---|---|
+| `lp.setup rs1` | custom-1, funct3 110, rd = 0, imm = 0 | lc = rs1; lp_start = pc + 4 (the body follows) |
+| `mac.lp`, `dmac.lp`, `msu.lp rs1, rs2` | custom-0, funct3 000, funct7 = that of `mac`/`dmac`/`msu` with bit 6 set | the MAC, then the loop-end step |
+| `lp.end` | custom-1, funct3 111, all other fields 0 | the loop-end step alone |
+| `lp.set rs1` / `lp.sets rs1` | custom-1, funct3 000, funct7 0000010, rd = 0 / 1, rs2 = 0 | lc = rs1 / lp_start = rs1 |
+| `lp.rd rd` / `lp.rds rd` | custom-1, funct3 011, rs1 = 0, imm = 8 / 9 | rd = lc / rd = lp_start |
+
+**The loop-end step:** if lc > 1, then lc = lc − 1 and execution goes to lp_start. Otherwise lc = 0 and execution
+falls through. So `lp.setup` with a count of n runs the body n times (once for n = 0 or 1), and `lp.end` outside
+a loop does nothing. `lp.rd`, `lp.rds`, `lp.set` and `lp.sets` save and restore the loop (an interrupt handler
+that uses a loop, or a nested loop). The body's last instruction must not itself be a branch or jump.
+
+### Why the loop end is an instruction, not an address
+
+The plan was a zero-overhead loop over an address range, with fetch jumping back after the instruction at
+`lp_end`, whatever it is. Spike cannot model that. An extension library adds instructions; it has no hook that
+runs after a base instruction. Without the model, the extension would lose its lockstep check. So the
+loop-back is folded into the body's last instruction instead. A MAC ends almost every DSP inner loop, so
+`dmac.lp` (or `mac.lp`, `msu.lp`) closes the loop at no cost; `lp.end` covers the other loops, at one instruction
+per pass in place of a count and a branch. The design is also simpler. Fetch needs no `lp_end` comparator in the
+next-PC path (the critical path), and there is no loop state in IF to repair after a flush.
+
+### Micro-architecture
+
+`rtl/core/loop_unit.v` holds `lc` and `lp_start`. EX treats a loop-end instruction as a branch: taken while
+lc > 1, to lp_start. Everything else is the existing branch machinery:
+- the branch predictor learns the loop-end instruction's address, and predicts it taken;
+- the mispredict path corrects the first pass (if the predictor has not seen the loop yet) and the last;
+- the loop costs 2 cycles at exit and nothing per pass.
+
+`lc` and `lp_start` change as the instruction leaves EX, under the same rule as `acc` and the address registers.
+So an interrupt taken at a `dmac.lp` neither adds nor counts down, and back-to-back loop ends need no forwarding.
+
+### Verification
+
+- The Spike model implements every instruction, so loops run in lockstep.
+- `tests/directed/dsp_loop.S` covers:
+  - counts of 0, 1, 2 and many;
+  - a one-instruction body (`mac.lp` issuing every cycle);
+  - `dmac.lp` over an address register, and `msu.lp`;
+  - a body with a branch that alternates (so it mispredicts);
+  - a compressed body starting at 2 mod 4;
+  - `lp.end` with no loop;
+  - save and restore around an inner loop: an outer loop of 4 passes each runs a 3-pass inner loop, and both
+    complete.
+- `tests/directed/dsp_irq.S` part 3 runs 40 hardware loops of `lw.a` and `dmac.lp` under timer interrupts. It
+  requires interrupts at the `dmac.lp`, `lc` = 0 after every pass, and an exact sum. Without the flush gating, a
+  mutant hangs it.
+
+### Result
+
+| Kernel (warm caches) | Cycles per unit | vs plain C |
+|---|---|---|
+| FIR, `lw.a` + `dmac`, software loop (step 3) | 3.75 per tap | 2.4× |
+| **FIR, `lw.a` + `dmac.lp`** (`fir_q15_lp`) | **3.19 per tap** | **2.9×** |
+| Energy, `lw.a` + `dmac`, software loop | 1.66 per sample | 6.7× |
+| **Energy, `lw.a` + `dmac.lp`** (`energy_q15_lp`) | **1.15 per sample** | **9.7×** |
+
+The FIR's inner loop is now six instructions for four taps at one per cycle. Its body is four `lw.a`, a `dmac` and a `dmac.lp`. Most of what
+remains is per output (about 51 cycles per output, against 27 in the loop): setting up the two address
+registers and the accumulator, reading and storing the result, the loop's exit mispredict, and a mispredict on
+the even/odd test, which alternates. Each loop is a single inline-asm statement, so the compiler cannot place
+anything between `lp.setup` and the body.

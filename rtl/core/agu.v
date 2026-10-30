@@ -32,7 +32,8 @@ module agu (
   reg  [15:0] ar_stride [0:3];
 
   wire [2:0] funct3 = insn[14:12];
-  wire       is_set = (funct3 == 3'b000);
+  wire       is_set  = (funct3 == 3'b000) && (insn[31:26] == 6'd0);   // not lp.set (loop_unit.v)
+  wire       is_load = (funct3 == 3'b001) || (funct3 == 3'b010) || (funct3 == 3'b101);
   wire [1:0] n      = is_set ? insn[8:7] : insn[21:20];   // rd field, or imm
 
   assign addr   = ar_addr[n];
@@ -51,7 +52,7 @@ module agu (
           ar_stride[n] <= a[15:0];                               // ar.cfg
         else
           ar_addr[n]   <= a;                                     // ar.set
-      end else if (funct3 != 3'b011) begin
+      end else if (is_load) begin
         ar_addr[n] <= ar_addr[n] + {{16{ar_stride[n][15]}}, ar_stride[n]};   // load: step
       end
     end

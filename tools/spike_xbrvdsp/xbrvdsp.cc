@@ -1,5 +1,6 @@
 // xbrvdsp.cc — Spike model of Xbrvdsp, BRV32P's DSP extension (step 1:
-// the multiply-accumulate unit; step 2: address generators). Loaded with
+// the multiply-accumulate unit; step 2: address generators; step 4: the
+// hardware loop). Loaded with
 //   spike --extlib=libxbrvdsp.so --extension=xbrvdsp ...
 // so that programs using the extension run in lockstep with the RTL.
 // Specification: doc/dsp_extension.md.
@@ -28,6 +29,15 @@
 //   ar.rd  rd, arN     funct3 011, rs1 0, imm N      rd = addr
 //   ar.rds rd, arN     funct3 011, rs1 0, imm N + 4  rd = sext(stride)
 // A load that traps (misaligned) leaves its address register unchanged.
+//
+// Hardware loop: lc (count) and lp_start. The body's last instruction is
+// marked: mac.lp / dmac.lp / msu.lp (funct7 bit 6 set) or lp.end. After it,
+// if lc > 1: lc -= 1 and go to lp_start; else lc = 0 and fall through.
+//   lp.setup rs1   custom-1, funct3 110, rd 0, imm 0    lc = rs1; lp_start = pc + 4
+//   lp.end         custom-1, funct3 111, all other fields 0
+//   lp.set  rs1    custom-1, funct7 0000010, funct3 000, rd 0, rs2 0   lc = rs1
+//   lp.sets rs1    ... rd 1                                         lp_start = rs1
+//   lp.rd  rd, 8   custom-1, funct3 011, rs1 0, imm 8: rd = lc; imm 9: rd = lp_start
 
 // Register writes go to the commit log (--log-commits), which the lockstep
 // check compares; Spike's own instructions set this in insn_template.cc
@@ -43,6 +53,17 @@
 static int64_t acc;                       // one hart
 static uint32_t ar_addr[4];
 static int16_t  ar_stride[4];
+static uint32_t lc, lp_start;
+
+static reg_t loop_next(reg_t pc)          // after a loop-end instruction
+{
+  if (lc > 1) {
+    lc--;
+    return lp_start;
+  }
+  lc = 0;
+  return pc + 4;
+}
 
 static int64_t wrap40(int64_t v)          // keep 40 bits, sign-extended
 {
@@ -73,6 +94,51 @@ static reg_t x_dmac(processor_t* p, insn_t insn, reg_t pc)
 static reg_t x_msu(processor_t* p, insn_t insn, reg_t pc)
 {
   acc = wrap40(acc - lo16(RS1) * lo16(RS2));
+  return pc + 4;
+}
+
+static reg_t x_mac_lp(processor_t* p, insn_t insn, reg_t pc)
+{
+  acc = wrap40(acc + lo16(RS1) * lo16(RS2));
+  return loop_next(pc);
+}
+
+static reg_t x_dmac_lp(processor_t* p, insn_t insn, reg_t pc)
+{
+  acc = wrap40(acc + lo16(RS1) * lo16(RS2) + hi16(RS1) * hi16(RS2));
+  return loop_next(pc);
+}
+
+static reg_t x_msu_lp(processor_t* p, insn_t insn, reg_t pc)
+{
+  acc = wrap40(acc - lo16(RS1) * lo16(RS2));
+  return loop_next(pc);
+}
+
+static reg_t x_lp_setup(processor_t* p, insn_t insn, reg_t pc)
+{
+  lc = (uint32_t)RS1;
+  lp_start = (uint32_t)(pc + 4);
+  return pc + 4;
+}
+
+static reg_t x_lp_end(processor_t* p, insn_t insn, reg_t pc)
+{
+  return loop_next(pc);
+}
+
+static reg_t x_lp_set(processor_t* p, insn_t insn, reg_t pc)
+{
+  if (insn.rd() == 1)
+    lp_start = (uint32_t)RS1;
+  else
+    lc = (uint32_t)RS1;
+  return pc + 4;
+}
+
+static reg_t x_lp_rd(processor_t* p, insn_t insn, reg_t pc)
+{
+  WRITE_RD(sext32(insn.i_imm() == 9 ? lp_start : lc));
   return pc + 4;
 }
 
@@ -212,6 +278,13 @@ class xbrvdsp_t : public extension_t
       {0x0000202B, 0xFFCFF07F, ALL(x_lw_a)},
       {0x0000502B, 0xFFCFF07F, ALL(x_lhu_a)},
       {0x0000302B, 0xFF8FF07F, ALL(x_ar_rd)},
+      {0x8000000B, 0xFE007FFF, ALL(x_mac_lp)},
+      {0x8200000B, 0xFE007FFF, ALL(x_dmac_lp)},
+      {0x8400000B, 0xFE007FFF, ALL(x_msu_lp)},
+      {0x0000602B, 0xFFF07FFF, ALL(x_lp_setup)},
+      {0x0000702B, 0xFFFFFFFF, ALL(x_lp_end)},
+      {0x0400002B, 0xFFF07F7F, ALL(x_lp_set)},
+      {0x0080302B, 0xFFEFF07F, ALL(x_lp_rd)},
     };
   }
 
@@ -233,6 +306,15 @@ class xbrvdsp_t : public extension_t
       new disasm_insn_t("lhu.a",   0x0000502B, 0xFFCFF07F, {&xrd, &xar_imm}),
       new disasm_insn_t("ar.rd",   0x0000302B, 0xFFCFF07F, {&xrd, &xar_imm}),
       new disasm_insn_t("ar.rds",  0x0040302B, 0xFFCFF07F, {&xrd, &xar_imm}),
+      new disasm_insn_t("mac.lp",  0x8000000B, 0xFE007FFF, {&xrs1, &xrs2}),
+      new disasm_insn_t("dmac.lp", 0x8200000B, 0xFE007FFF, {&xrs1, &xrs2}),
+      new disasm_insn_t("msu.lp",  0x8400000B, 0xFE007FFF, {&xrs1, &xrs2}),
+      new disasm_insn_t("lp.setup", 0x0000602B, 0xFFF07FFF, {&xrs1}),
+      new disasm_insn_t("lp.end",  0x0000702B, 0xFFFFFFFF, {}),
+      new disasm_insn_t("lp.set",  0x0400002B, 0xFFF07FFF, {&xrs1}),
+      new disasm_insn_t("lp.sets", 0x040000AB, 0xFFF07FFF, {&xrs1}),
+      new disasm_insn_t("lp.rd",   0x0080302B, 0xFFFFF07F, {&xrd}),
+      new disasm_insn_t("lp.rds",  0x0090302B, 0xFFFFF07F, {&xrd}),
     };
   }
 
@@ -240,6 +322,8 @@ class xbrvdsp_t : public extension_t
   {
     acc = 0;
     for (int i = 0; i < 4; i++) { ar_addr[i] = 0; ar_stride[i] = 0; }
+    lc = 0;
+    lp_start = 0;
   }
 };
 

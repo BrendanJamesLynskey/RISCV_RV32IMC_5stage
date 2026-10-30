@@ -173,9 +173,9 @@ module decoder (
       // write no register; acc.rd and acc.rdh write rd from acc.
       OP_CUSTOM0: begin
         if (funct3 == 3'b000 && rd_addr == 5'd0 &&
-            (funct7 == 7'b0000000 || funct7 == 7'b0000001 || funct7 == 7'b0000010 ||
+            (funct7[5:0] == 6'b000000 || funct7[5:0] == 6'b000001 || funct7[5:0] == 6'b000010 ||
              ((funct7 == 7'b0000100 || funct7 == 7'b0000101) && rs2_addr == 5'd0)))
-          ;                                           // mac, dmac, msu, acc.set, acc.seth
+          ;                                           // mac, dmac, msu (+ .lp: funct7 bit 6), acc.set, acc.seth
         else if (((funct3 == 3'b001 || funct3 == 3'b010) && funct7 == 7'b0000000 && rs1_addr == 5'd0) ||
                  (funct3 == 3'b011 && (funct7 == 7'b0000000 || funct7 == 7'b0000001) &&
                   rs1_addr == 5'd0 && rs2_addr == 5'd0)) begin
@@ -189,6 +189,12 @@ module decoder (
         if (funct3 == 3'b000 && (funct7 == 7'b0000000 || funct7 == 7'b0000001) &&
             rs2_addr == 5'd0 && rd_addr[4:2] == 3'b000)
           ;                                           // ar.set, ar.cfg
+        else if (funct3 == 3'b000 && funct7 == 7'b0000010 && rs2_addr == 5'd0 && rd_addr[4:1] == 4'b0000)
+          ;                                           // lp.set, lp.sets
+        else if (funct3 == 3'b110 && rd_addr == 5'd0 && instr[31:20] == 12'd0)
+          ;                                           // lp.setup
+        else if (funct3 == 3'b111 && instr[31:15] == 17'd0 && rd_addr == 5'd0)
+          ;                                           // lp.end
         else if ((funct3 == 3'b001 || funct3 == 3'b010 || funct3 == 3'b101) &&
                  rs1_addr == 5'd0 && instr[31:22] == 10'd0) begin
           ctrl[`CTRL_MEM_RD]    = 1'b1;               // lh.a, lw.a, lhu.a
@@ -196,8 +202,9 @@ module decoder (
           ctrl[`CTRL_WB_SEL]    = WB_MEM;
           ctrl[`CTRL_MEM_WIDTH] = funct3[1:0];
           ctrl[`CTRL_MEM_SIGN]  = ~funct3[2];
-        end else if (funct3 == 3'b011 && rs1_addr == 5'd0 && instr[31:23] == 9'd0) begin
-          ctrl[`CTRL_REG_WR]    = 1'b1;               // ar.rd, ar.rds
+        end else if (funct3 == 3'b011 && rs1_addr == 5'd0 &&
+                     (instr[31:23] == 9'd0 || instr[31:20] == 12'd8 || instr[31:20] == 12'd9)) begin
+          ctrl[`CTRL_REG_WR]    = 1'b1;               // ar.rd, ar.rds, lp.rd
           ctrl[`CTRL_WB_SEL]    = WB_AGU;
         end else
           ctrl[`CTRL_ILLEGAL] = 1'b1;

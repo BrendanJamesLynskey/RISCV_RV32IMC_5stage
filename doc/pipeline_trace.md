@@ -34,7 +34,7 @@ them):
 | EX | valid, pc, encoding, `rs1`/`rs2`, forwarding select for each (0 register file, 1 from MEM, 2 from WB) |
 | MEM | valid, pc, encoding, `rd`, data-memory read/write, `dmem_stall` |
 | WB | valid (high once, the cycle the instruction retires), pc, encoding, register write enable, `rd`, data |
-| Control | `stall_if/id/ex`, `flush_id/ex/mem`, `mem_stall`, load-use, divide busy, mispredict, trap, exception in MEM, interrupt taken, MRET, FENCE.I, trap cause, mul-use (added later, at the end, so older traces still parse) |
+| Control | `stall_if/id/ex`, `flush_id/ex/mem`, `mem_stall`, load-use, divide busy, mispredict, trap, exception in MEM, interrupt taken, MRET, FENCE.I, trap cause, mul-use, csr-use (both added later, at the end, so older traces still parse) |
 
 ## Rebuilding instructions, and checking the rebuild
 
@@ -77,7 +77,7 @@ One row per instruction, one column per cycle. `F D X M W` are IF, ID, EX,
 MEM and WB; lower case means the instruction is still in that stage (held);
 `*` marks the cycle it is gone, squashed; `!` a trap. The `events` row gives
 the main event of each cycle: `I` I-cache miss, `D` D-cache miss, `L`
-load-use bubble, `U` mul-use bubble, `B` divide busy, `P` mispredict, `T` trap, `Q` interrupt,
+load-use bubble, `U` mul-use bubble, `C` csr-use bubble, `B` divide busy, `P` mispredict, `T` trap, `Q` interrupt,
 `R` MRET, `F` FENCE.I.
 
 The examples below are from the test runs, unedited.
@@ -289,8 +289,8 @@ every line in that cycle too.
 `pipeview.lost_cycles` explains every cycle in which no instruction retires.
 Either the pipeline was held (a D-cache wait or an I-cache miss), or WB holds a
 bubble, which is followed back register by register to the cycle that made it:
-a flush (mispredict, trap, MRET, FENCE.I), a load-use or mul-use bubble, a
-divide holding EX, or fetch delivering nothing while it assembles a 32-bit instruction that
+a flush (mispredict, trap, MRET, FENCE.I), a load-use, mul-use or csr-use
+bubble, a divide holding EX, or fetch delivering nothing while it assembles a 32-bit instruction that
 straddles two words. The DSP benchmarks (`tests/bench`) report their cycles
 this way.
 

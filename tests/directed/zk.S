@@ -1,5 +1,5 @@
 /*
- * zk.S — Zbkb, Zknh, Zkne and Zknd (ratified scalar cryptography).
+ * zk.S — Zbkb, Zbkc, Zbkx, Zknh, Zkne and Zknd (ratified scalar cryptography).
  *
  * Every instruction on the same operands (rs1 = 0x8badf00d, rs2 =
  * 0x01234567); the expected values were computed in Python from the
@@ -232,6 +232,106 @@ RVTEST_CODE_BEGIN
   li      TESTNUM, 41
   aes32dsmi a0, s0, s1, 3
   li      t1, 0xf5fe954c
+  bne     a0, t1, fail
+
+  # Zbkc and Zbkx: carry-less products at the edges (all ones, the end bits),
+  # and crossbar permutes including out-of-range indexes (which give 0)
+  li      TESTNUM, 42
+  li      s2, 0x8badf00d
+  li      s3, 0x1234567
+  clmul   a0, s2, s3
+  li      t1, 0x5607abc3
+  bne     a0, t1, fail
+
+  li      TESTNUM, 43
+  li      s2, 0x8badf00d
+  li      s3, 0x1234567
+  clmulh  a0, s2, s3
+  li      t1, 0x9b64c6
+  bne     a0, t1, fail
+
+  li      TESTNUM, 44
+  li      s2, 0xffffffff
+  li      s3, 0xffffffff
+  clmul   a0, s2, s3
+  li      t1, 0x55555555
+  bne     a0, t1, fail
+
+  li      TESTNUM, 45
+  li      s2, 0xffffffff
+  li      s3, 0xffffffff
+  clmulh  a0, s2, s3
+  li      t1, 0x55555555
+  bne     a0, t1, fail
+
+  li      TESTNUM, 46
+  li      s2, 0x80000001
+  li      s3, 0x80000001
+  clmul   a0, s2, s3
+  li      t1, 0x1
+  bne     a0, t1, fail
+
+  li      TESTNUM, 47
+  li      s2, 0x80000001
+  li      s3, 0x80000001
+  clmulh  a0, s2, s3
+  li      t1, 0x40000000
+  bne     a0, t1, fail
+
+  li      TESTNUM, 48
+  li      s2, 0x76543210
+  li      s3, 0x1234567
+  xperm4  a0, s2, s3
+  li      t1, 0x1234567
+  bne     a0, t1, fail
+
+  li      TESTNUM, 49
+  li      s2, 0x76543210
+  li      s3, 0x1234567
+  xperm8  a0, s2, s3
+  li      t1, 0x32000000
+  bne     a0, t1, fail
+
+  li      TESTNUM, 50
+  li      s2, 0x8badf00d
+  li      s3, 0xf1e2d3c
+  xperm4  a0, s2, s3
+  li      t1, 0xd00000f0
+  bne     a0, t1, fail
+
+  li      TESTNUM, 51
+  li      s2, 0x8badf00d
+  li      s3, 0xf1e2d3c
+  xperm8  a0, s2, s3
+  li      t1, 0x0
+  bne     a0, t1, fail
+
+  li      TESTNUM, 52
+  li      s2, 0xdeadbeef
+  li      s3, 0x3020100
+  xperm4  a0, s2, s3
+  li      t1, 0xfbfefeff
+  bne     a0, t1, fail
+
+  li      TESTNUM, 53
+  li      s2, 0xdeadbeef
+  li      s3, 0x3020100
+  xperm8  a0, s2, s3
+  li      t1, 0xdeadbeef
+  bne     a0, t1, fail
+
+  li      TESTNUM, 54
+  li      s2, 0xdeadbeef
+  li      s3, 0x4ff0201
+  xperm4  a0, s2, s3
+  li      t1, 0xfd00fefe
+  bne     a0, t1, fail
+
+  li      TESTNUM, 55
+  li      s2, 0xdeadbeef
+  li      s3, 0x4ff0201
+  xperm8  a0, s2, s3
+  li      t1, 0xadbe
   bne     a0, t1, fail
 
   TEST_PASSFAIL

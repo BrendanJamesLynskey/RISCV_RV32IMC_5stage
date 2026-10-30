@@ -1,5 +1,5 @@
 // ============================================================================
-// zk_unit.v — ratified scalar cryptography for RV32: Zbkb, Zknh, Zkne, Zknd
+// zk_unit.v — ratified scalar cryptography for RV32: Zbkb, Zbkc, Zbkx, Zknh, Zkne, Zknd
 // ============================================================================
 // Zbkb (bit manipulation for cryptography):
 //   ror, rol, rori; andn, orn, xnor; pack, packh; brev8, rev8; zip, unzip
@@ -8,6 +8,9 @@
 //   sha512sig0l/h, sha512sig1l/h, sha512sum0r, sha512sum1r (two sources:
 //   SHA-512's 64-bit words as two 32-bit halves, RV32's form)
 // Zkne and Zknd (AES, RV32): aes32esi, aes32esmi, aes32dsi, aes32dsmi
+// Zbkc (carry-less multiply): clmul (low word), clmulh (high word)
+// Zbkx (crossbar permutation): xperm4, xperm8 (rs2 indexes rs1's nibbles or
+//   bytes; an index past the end gives 0)
 // The encodings are the standard ones (OP and OP-IMM); the decoder sends
 // them here, and EX takes the result through the extension write-back
 // select. One cycle, no state. a and b are the forwarded rs1 and rs2.
@@ -603,6 +606,26 @@ module zk_unit (
   wire [31:0] aes_rot = (aes_col << {bs, 3'b000}) | (aes_col >> (6'd32 - {1'b0, bs, 3'b000}));
   wire        is_aes  = !is_imm && funct3 == 3'b000 && aes_op[4] && aes_op[0];
 
+  // Carry-less multiply: the 63-bit product of a and b over GF(2)
+  reg [63:0] clp;
+  integer ci;
+  always @(*) begin
+    clp = 64'd0;
+    for (ci = 0; ci < 32; ci = ci + 1)
+      if (b[ci]) clp = clp ^ ({32'd0, a} << ci);
+  end
+
+  // Crossbar permutations: each nibble (xperm4) or byte (xperm8) of b picks
+  // one of a's
+  reg [31:0] xp4, xp8;
+  integer xi;
+  always @(*) begin
+    for (xi = 0; xi < 8; xi = xi + 1)
+      xp4[4*xi +: 4] = b[4*xi + 3] ? 4'd0 : a[4*b[4*xi +: 3] +: 4];
+    for (xi = 0; xi < 4; xi = xi + 1)
+      xp8[8*xi +: 8] = (b[8*xi + 2 +: 6] != 6'd0) ? 8'd0 : a[8*b[8*xi +: 2] +: 8];
+  end
+
   always @(*) begin
     result = 32'd0;
     if (is_imm) begin
@@ -631,6 +654,10 @@ module zk_unit (
         7'h2b: result = (a << 3) ^ (a >> 6) ^ (a >> 19) ^ (b >> 29) ^ (b << 26) ^ (b << 13);   // sig1l
         default: result = (a << 3) ^ (a >> 6) ^ (a >> 19) ^ (b >> 29) ^ (b << 13);            // sig1h (0x2f)
       endcase
+    end else if (funct7 == 7'b0000101) begin
+      result = (funct3 == 3'b001) ? clp[31:0] : clp[63:32];                       // clmul, clmulh
+    end else if (funct7 == 7'b0010100) begin
+      result = (funct3 == 3'b010) ? xp4 : xp8;                                     // xperm4, xperm8
     end else if (funct7 == 7'b0110000) begin
       result = rot;                                                                // rol, ror
     end else if (funct7 == 7'b0100000) begin

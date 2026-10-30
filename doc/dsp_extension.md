@@ -152,9 +152,9 @@ same alignment check, the same D-cache access, the same load-use interlock.
 |---|---|---|
 | FIR, plain C | 9.18 per tap | 2 loads, 2 pointer increments, `mul`, `add`, `bne` (and a mul-use bubble) |
 | FIR, `mac` (step 1) | 7.80 per tap | 2 loads, 2 increments, `mac`, `bne`, and a load-use bubble |
-| FIR, `lh.a` + `mac` | 6.94 per tap | `lh.a`, `lh.a`, `mac`, count, `bne`, and a load-use bubble |
+| FIR, `lh.a` + `mac` | 6.93 per tap | `lh.a`, `lh.a`, `mac`, count, `bne`, and a load-use bubble |
 | FIR, `lh.a` + `mac`, two taps per iteration | **4.93 per tap** | four `lh.a`, two `mac`, count, `bne`: no bubble |
-| Energy, `dmac` (step 1) | 3.20 per sample | |
+| Energy, `dmac` (step 1) | 3.15 per sample | |
 | Energy, `lw.a` + `dmac` | 2.66 per sample | |
 | Energy, `lw.a` + `dmac`, four samples per iteration | **1.66 per sample** | |
 

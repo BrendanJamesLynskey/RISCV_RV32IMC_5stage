@@ -280,7 +280,9 @@ the saturating mix gains less because it is memory-bound (its three arrays confl
 computes each half of the twiddle product in one instruction, and packed halving adds and subtracts (step 5c)
 make each butterfly output one instruction. SHA-256 with the ratified Zbkb and Zknh runs 1.8× faster, and
 AES-128 with Zkne 4.7× faster than T-table C, and CRC-32 by carry-less multiply (Zbkc) 4.2× faster than
-table-driven C ([doc/crypto_extensions.md](doc/crypto_extensions.md)). Memory-bound kernels move by a few percent when the data layout
+table-driven C ([doc/crypto_extensions.md](doc/crypto_extensions.md)). The benchmark also checks Zkt's
+promise of data-independent timing: the Zkne AES takes 5,013 cycles for both of two keys and plaintexts, while the
+T-table version takes 21,079 and 24,044 as its table lookups conflict in the D-cache differently. Memory-bound kernels move by a few percent when the data layout
 changes (an added array shifts the D-cache conflicts); the table is from the latest build. The benchmarks are compiled with
 `-falign-loops=4`, so that no loop starts with a 32-bit instruction at 2 mod 4, which costs a fetch bubble
 on every jump back.

@@ -692,6 +692,24 @@ int main(void)
       if (act[i] != aes_expect[i]) return 34 + k;
   }
 
+  /* Timing against the data (Zkt): each AES kernel run, warm, on two keys
+     and plaintexts through the very same call, so only the data differs.
+     Markers 80/81 and 82/83: T-table, keys 1 and 2; 84/85 and 86/87: Zkne. */
+  for (int z = 0; z < 2; z++)
+    for (int k = 0; k < 4; k++) {
+      const uint32_t *pt = (const uint32_t *)(k < 2 ? aes_pt : aes_pt2);
+      const uint32_t *rk = (const uint32_t *)(k < 2 ? aes_rk : aes_rk2);
+      const uint8_t *ex = k < 2 ? aes_expect : aes_expect2;
+      void (*f)(uint32_t *, const uint32_t *, const uint32_t *, int) = z ? aes128_enc_zk : aes128_enc_t;
+      if (k == 1) { if (z) BENCH_MARK(84); else BENCH_MARK(80); }
+      if (k == 3) { if (z) BENCH_MARK(86); else BENCH_MARK(82); }
+      f((uint32_t *)act, pt, rk, AES_BLOCKS);
+      if (k == 1) { if (z) BENCH_MARK(85); else BENCH_MARK(81); }
+      if (k == 3) { if (z) BENCH_MARK(87); else BENCH_MARK(83); }
+      for (int i = 0; i < 16 * AES_BLOCKS; i++)
+        if (act[i] != ex[i]) return 44 + 4 * z + k;
+    }
+
   /* CRC-32 of 256 bytes: table-driven, then carry-less multiply; cold first */
   for (int k = 0; k < 4; k++) {
     uint32_t c;

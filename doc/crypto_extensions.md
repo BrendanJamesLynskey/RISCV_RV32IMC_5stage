@@ -11,7 +11,7 @@ custom. The standard encodings bring three benefits:
 | 1 | **Zbkb** (bit manipulation for cryptography) and **Zknh** (SHA-256 and SHA-512) | **done** |
 | 2 | **Zkne** and **Zknd** (AES rounds, `aes32*`) | **done** |
 | 3 | **Zbkc** (carry-less multiply) and **Zbkx** (crossbar permutations) | **done** |
-| 4 | Zkt (data-independent timing): check that these instructions' cycle counts do not depend on the data | planned |
+| 4 | Zkt (data-independent timing): a measured check that AES with these instructions takes the same cycles whatever the key and data | **done** |
 
 ## Step 1: Zbkb and Zknh
 
@@ -152,3 +152,29 @@ Its inner loop is 10 instructions per 4 bytes, about 10.6 cycles:
 It needs no table, so it keeps no 1 KB of data in the D-cache.
 
 Cost: 567 LUTs (10,102 → 10,669), almost all of it the 32×32 AND-XOR array. The worst path was fetch, at 64.1 MHz.
+
+## Step 4: timing against the data (Zkt)
+
+Zkt is a promise about latency. It says that the listed instructions take a time that does not depend on their
+operands:
+- the Zbkb, Zbkc and Zbkx instructions, and the AES and SHA ones;
+- the base ALU instructions, and the multiply.
+
+In BRV32P each of these is one cycle in EX, or two for a multiply in MEM. None of them has an early exit, a
+data-dependent stall or a shortcut. The divider (not in Zkt's list) always takes 32 steps.
+
+The benchmark checks the consequence end to end. It runs the AES kernels, warm, on two different keys and
+plaintexts through the very same call, so that only the data differs:
+
+| AES-128, 256 bytes (warm caches) | key and plaintext 1 | key and plaintext 2 |
+|---|---|---|
+| one-table T-table C | 21,079 cycles | 24,044 cycles (D-cache waits 1,287 against 4,264) |
+| Zkne | **5,013** | **5,013** |
+
+The T-table version's loads go to addresses chosen by the key and the data. So its D-cache conflicts, and
+its time, depend on them. That is the cache-timing channel AES instructions exist to close. The Zkne version
+loads only the input, the round keys and the output, at fixed addresses, and runs in exactly the same number of
+cycles. `bench_report.py` checks the equality on every benchmark run, including in CI, and fails if it breaks.
+
+This is one kernel and two inputs, not a proof. A fuller check would vary the inputs widely and cover every Zkt
+instruction in isolation; the pipeline trace makes both straightforward.

@@ -47,6 +47,21 @@ module decoder (
     endcase
   end
 
+  // ── Zbkb and Zknh (scalar cryptography): computed by zk_unit.v ──────
+  wire [11:0] imm12 = instr[31:20];
+  wire is_zk =
+    (opcode == OP_REG &&
+      ((funct7 == 7'b0110000 && (funct3 == 3'b001 || funct3 == 3'b101)) ||                   // rol, ror
+       (funct7 == 7'b0100000 && (funct3 == 3'b111 || funct3 == 3'b110 || funct3 == 3'b100)) || // andn, orn, xnor
+       (funct7 == 7'b0000100 && (funct3 == 3'b100 || funct3 == 3'b111)) ||                   // pack, packh
+       (funct3 == 3'b000 && (funct7 == 7'h28 || funct7 == 7'h29 || funct7 == 7'h2a ||        // sha512*
+                             funct7 == 7'h2b || funct7 == 7'h2e || funct7 == 7'h2f)))) ||
+    (opcode == OP_IMM &&
+      ((funct3 == 3'b101 && (funct7 == 7'b0110000 ||                                         // rori
+                             imm12 == 12'h687 || imm12 == 12'h698 || imm12 == 12'h08f)) ||   // brev8, rev8, unzip
+       (funct3 == 3'b001 && (imm12 == 12'h08f || imm12 == 12'h100 || imm12 == 12'h101 ||     // zip, sha256*
+                             imm12 == 12'h102 || imm12 == 12'h103))));
+
   // ── Control signal generation ────────────────────────────────────────
   always @(*) begin
     // Defaults — everything off
@@ -122,6 +137,7 @@ module decoder (
           3'b110: ctrl[`CTRL_ALU_OP] = ALU_OR;
           3'b111: ctrl[`CTRL_ALU_OP] = ALU_AND;
         endcase
+        if (is_zk) ctrl[`CTRL_WB_SEL] = WB_DSP;    // the extension result select
       end
 
       OP_REG: begin
@@ -143,6 +159,7 @@ module decoder (
             3'b110: ctrl[`CTRL_ALU_OP] = ALU_OR;
             3'b111: ctrl[`CTRL_ALU_OP] = ALU_AND;
           endcase
+          if (is_zk) ctrl[`CTRL_WB_SEL] = WB_DSP;  // the extension result select
         end
       end
 

@@ -491,6 +491,10 @@ void fft_stages_packed(uint32_t *y, int n)
   }
 }
 
+/* SHA-256 (sha256.c, plain; sha256_zk.c, Zbkb and Zknh) */
+void sha256(const uint8_t *msg, int len, uint32_t h[8]);
+void sha256_zk(const uint8_t *msg, int len, uint32_t h[8]);
+
 static int16_t fir_y[FIR_OUTS];
 
 static int fir_ok(void)
@@ -647,6 +651,20 @@ int main(void)
     if (k == 1) BENCH_MARK(65);
     for (int i = 0; i < FFT_N; i++)
       if (fy[i] != fft_expect[i]) return 28 + k;
+  }
+
+  /* Zk: SHA-256 of 256 bytes, plain then with Zbkb and Zknh; cold first */
+  static uint32_t dg[8];
+  for (int k = 0; k < 4; k++) {
+    for (int i = 0; i < 8; i++) dg[i] = 0;
+    if (k == 1) BENCH_MARK(66);
+    if (k == 3) BENCH_MARK(68);
+    if (k < 2) sha256(sha_msg, SHA_LEN, dg);
+    else       sha256_zk(sha_msg, SHA_LEN, dg);
+    if (k == 1) BENCH_MARK(67);
+    if (k == 3) BENCH_MARK(69);
+    for (int i = 0; i < 8; i++)
+      if (dg[i] != sha_expect[i]) return 30 + k;
   }
 
   return 0;

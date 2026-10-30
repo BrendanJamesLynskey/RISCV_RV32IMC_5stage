@@ -16,6 +16,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 CROSS="${CROSS:-riscv64-unknown-elf-}"
 MARCH="${MARCH:-rv32imc_zicsr}"
+MARCH_ZK="${MARCH}_zbkb_zknh"          # sha256_zk.c only: the plain kernels stay plain
 B="$HERE/build"
 mkdir -p "$B"
 
@@ -24,8 +25,10 @@ LOCKSTEP="${LOCKSTEP:-1}"
 [ -x "$SPIKE" ] || LOCKSTEP=0
 
 python3 "$HERE/gen_data.py" > "$B/bench_data.h"
-"${CROSS}gcc" -O2 -falign-loops=4 -march="$MARCH" -mabi=ilp32 -static -mcmodel=medany -nostdlib -nostartfiles -ffreestanding \
-  -I "$B" -I "$HERE" -T "$HERE/link.ld" "$HERE/crt.S" "$HERE/dsp.c" -o "$B/dsp.elf"
+CFLAGS=(-O2 -falign-loops=4 -mabi=ilp32 -mcmodel=medany -ffreestanding -I "$B" -I "$HERE")
+"${CROSS}gcc" "${CFLAGS[@]}" -march="$MARCH_ZK" -c "$HERE/sha256_zk.c" -o "$B/sha256_zk.o"
+"${CROSS}gcc" "${CFLAGS[@]}" -march="$MARCH" -static -nostdlib -nostartfiles -T "$HERE/link.ld" \
+  "$HERE/crt.S" "$HERE/dsp.c" "$HERE/sha256.c" "$B/sha256_zk.o" -o "$B/dsp.elf"
 "${CROSS}objcopy" -O binary "$B/dsp.elf" "$B/dsp.bin"
 python3 "$ROOT/tests/isa/elf2hex.py" "$B/dsp.bin" "$B/dsp.hex"
 "${CROSS}objdump" -d "$B/dsp.elf" > "$B/dsp.dis"
@@ -43,7 +46,7 @@ case "$result" in "RESULT PASS"*) ;; *) exit 1 ;; esac
 python3 "$ROOT/scripts/pipeview.py" check "$B/dsp.pipe" "$B/dsp.trace"
 if [ "$LOCKSTEP" = 1 ]; then
   XBRVDSP_LIB="${XBRVDSP_LIB:-$ROOT/tools/spike_xbrvdsp/build/libxbrvdsp.so}"
-  "$SPIKE" --isa="$MARCH" --extlib="$XBRVDSP_LIB" --extension=xbrvdsp -m0x80000000:0x8000 \
+  "$SPIKE" --isa="$MARCH_ZK" --extlib="$XBRVDSP_LIB" --extension=xbrvdsp -m0x80000000:0x8000 \
     --log-commits "$B/dsp.elf" 2> "$B/dsp.spike" || true
   python3 "$ROOT/tests/isa/lockstep.py" "$B/dsp.trace" "$B/dsp.spike" | tail -n 1
 fi

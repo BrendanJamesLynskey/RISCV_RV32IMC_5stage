@@ -16,6 +16,8 @@
 //   acc.rdh rd, sh     funct7 0000000, funct3 010, rs1 0  rd = sat16((acc + rnd) >> sh)
 //   acc.rdl rd         funct7 0000000, funct3 011, rs1 0, rs2 0  rd = acc[31:0]
 //   acc.rdx rd         funct7 0000001, funct3 011, rs1 0, rs2 0  rd = sext(acc[39:32])
+//   sadd rd, rs1, rs2  funct7 0000000, funct3 100   rd = sat32(rs1 + rs2)
+//   ssub rd, rs1, rs2  funct7 0000001, funct3 100   rd = sat32(rs1 - rs2)
 // lo/hi are the signed 16-bit halves; sh is the rs2 field (0-31); rnd is
 // 2^(sh-1), or 0 when sh is 0.
 //
@@ -139,6 +141,25 @@ static reg_t x_lp_set(processor_t* p, insn_t insn, reg_t pc)
 static reg_t x_lp_rd(processor_t* p, insn_t insn, reg_t pc)
 {
   WRITE_RD(sext32(insn.i_imm() == 9 ? lp_start : lc));
+  return pc + 4;
+}
+
+static reg_t sat32(int64_t v)
+{
+  if (v > INT32_MAX) v = INT32_MAX;
+  if (v < INT32_MIN) v = INT32_MIN;
+  return sext32(v);
+}
+
+static reg_t x_sadd(processor_t* p, insn_t insn, reg_t pc)
+{
+  WRITE_RD(sat32((int64_t)(int32_t)RS1 + (int32_t)RS2));
+  return pc + 4;
+}
+
+static reg_t x_ssub(processor_t* p, insn_t insn, reg_t pc)
+{
+  WRITE_RD(sat32((int64_t)(int32_t)RS1 - (int32_t)RS2));
   return pc + 4;
 }
 
@@ -278,6 +299,8 @@ class xbrvdsp_t : public extension_t
       {0x0000202B, 0xFFCFF07F, ALL(x_lw_a)},
       {0x0000502B, 0xFFCFF07F, ALL(x_lhu_a)},
       {0x0000302B, 0xFF8FF07F, ALL(x_ar_rd)},
+      {0x0000400B, 0xFE00707F, ALL(x_sadd)},
+      {0x0200400B, 0xFE00707F, ALL(x_ssub)},
       {0x8000000B, 0xFE007FFF, ALL(x_mac_lp)},
       {0x8200000B, 0xFE007FFF, ALL(x_dmac_lp)},
       {0x8400000B, 0xFE007FFF, ALL(x_msu_lp)},
@@ -306,6 +329,8 @@ class xbrvdsp_t : public extension_t
       new disasm_insn_t("lhu.a",   0x0000502B, 0xFFCFF07F, {&xrd, &xar_imm}),
       new disasm_insn_t("ar.rd",   0x0000302B, 0xFFCFF07F, {&xrd, &xar_imm}),
       new disasm_insn_t("ar.rds",  0x0040302B, 0xFFCFF07F, {&xrd, &xar_imm}),
+      new disasm_insn_t("sadd",    0x0000400B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
+      new disasm_insn_t("ssub",    0x0200400B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
       new disasm_insn_t("mac.lp",  0x8000000B, 0xFE007FFF, {&xrs1, &xrs2}),
       new disasm_insn_t("dmac.lp", 0x8200000B, 0xFE007FFF, {&xrs1, &xrs2}),
       new disasm_insn_t("msu.lp",  0x8400000B, 0xFE007FFF, {&xrs1, &xrs2}),

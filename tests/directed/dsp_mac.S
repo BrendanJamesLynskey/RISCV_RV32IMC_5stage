@@ -6,7 +6,8 @@
  * with Python; the run is also compared with Spike (libxbrvdsp.so).
  * Covered: mac, dmac, msu, acc.set; rounding; 32- and 16-bit saturation;
  * the 8 guard bits (sums beyond 32 bits, and wrapping at 40 bits);
- * operands that arrive by forwarding and after a load-use bubble.
+ * operands that arrive by forwarding and after a load-use bubble; sadd and
+ * ssub at and across both saturation limits (step 5).
  */
 
 #include "riscv_test.h"
@@ -21,6 +22,8 @@
 #define ACC_SETH(a)    .insn r CUSTOM_0, 0, 5, x0, a, x0
 #define ACC_RDL(d)     .insn r CUSTOM_0, 3, 0, d, x0, x0
 #define ACC_RDX(d)     .insn r CUSTOM_0, 3, 1, d, x0, x0
+#define SADD(d, a, b)  .insn r CUSTOM_0, 4, 0, d, a, b
+#define SSUB(d, a, b)  .insn r CUSTOM_0, 4, 1, d, a, b
 
 #define CHECK(n, reg, value) \
   li TESTNUM, n; li t6, value; bne reg, t6, fail
@@ -139,6 +142,51 @@ RVTEST_CODE_BEGIN
   MAC(t0, t0)
   ACC_RD(a0, 0)
   CHECK(10, a0, 8)
+
+  # 12: sadd: in range, exactly at the limit, and beyond it both ways
+  li      t0, 1000
+  li      t1, -3000
+  SADD(a0, t0, t1)
+  CHECK(12, a0, -2000)
+  li      t0, 0x7ffffffe
+  li      t1, 1
+  SADD(a0, t0, t1)
+  CHECK(12, a0, 0x7fffffff)
+  SADD(a0, a0, t1)                # 0x7fffffff + 1: saturates
+  CHECK(12, a0, 0x7fffffff)
+  li      t0, 0x80000000
+  li      t1, -1
+  SADD(a0, t0, t1)
+  CHECK(12, a0, 0x80000000)
+  li      t0, 0x80000000
+  SADD(a0, t0, t0)                # -2^31 + -2^31
+  CHECK(12, a0, 0x80000000)
+
+  # 13: ssub, including 0 - (-2^31), which overflows
+  li      t0, 5
+  li      t1, 7
+  SSUB(a0, t0, t1)
+  CHECK(13, a0, -2)
+  li      t1, 0x80000000
+  SSUB(a0, zero, t1)
+  CHECK(13, a0, 0x7fffffff)
+  li      t0, 0x80000000
+  li      t1, 1
+  SSUB(a0, t0, t1)
+  CHECK(13, a0, 0x80000000)
+  li      t0, 0x7fffffff
+  li      t1, -1
+  SSUB(a0, t0, t1)
+  CHECK(13, a0, 0x7fffffff)
+
+  # 14: the result forwarded straight into another sadd, and to a branch
+  li      t0, 0x40000000
+  SADD(a0, t0, t0)                # 2^31: saturates
+  SADD(a1, a0, a0)
+  CHECK(14, a1, 0x7fffffff)
+  li      t6, 0x7fffffff
+  SADD(a2, t0, t0)
+  bne     a2, t6, fail
 
   TEST_PASSFAIL
 

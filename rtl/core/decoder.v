@@ -178,8 +178,9 @@ module decoder (
           ;                                           // mac, dmac, msu (+ .lp: funct7 bit 6), acc.set, acc.seth
         else if (((funct3 == 3'b001 || funct3 == 3'b010) && funct7 == 7'b0000000 && rs1_addr == 5'd0) ||
                  (funct3 == 3'b011 && (funct7 == 7'b0000000 || funct7 == 7'b0000001) &&
-                  rs1_addr == 5'd0 && rs2_addr == 5'd0)) begin
-          ctrl[`CTRL_REG_WR] = 1'b1;                  // acc.rd, acc.rdh, acc.rdl, acc.rdx
+                  rs1_addr == 5'd0 && rs2_addr == 5'd0) ||
+                 (funct3 == 3'b100 && (funct7 == 7'b0000000 || funct7 == 7'b0000001))) begin
+          ctrl[`CTRL_REG_WR] = 1'b1;                  // acc.rd, acc.rdh, acc.rdl, acc.rdx, sadd, ssub
           ctrl[`CTRL_WB_SEL] = WB_DSP;
         end else
           ctrl[`CTRL_ILLEGAL] = 1'b1;

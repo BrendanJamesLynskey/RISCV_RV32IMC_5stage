@@ -12,7 +12,8 @@ project's own.
 | 2 | Address generators: loads that step a pointer register (bit-reversed addressing comes with the FFT, step 5) | **done** |
 | 3 | Two taps per `dmac` in the FIR, from aligned word loads (software only: no new hardware was needed) | **done** |
 | 4 | Hardware loop: the loop-back folded into the body's last instruction (`dmac.lp`, `lp.end`) | **done** |
-| 5 | Saturating add and subtract; bit-reversed addressing; biquad IIR and radix-2 FFT benchmarks | planned |
+| 5a | Saturating add and subtract; biquad IIR and saturating-mix benchmarks | **done** |
+| 5b | Bit-reversed addressing; radix-2 FFT benchmark | planned |
 
 ## Step 1: the multiply-accumulate unit
 
@@ -260,3 +261,40 @@ remains is per output (about 51 cycles per output, against 27 in the loop): sett
 registers and the accumulator, reading and storing the result, the loop's exit mispredict, and a mispredict on
 the even/odd test, which alternates. Each loop is a single inline-asm statement, so the compiler cannot place
 anything between `lp.setup` and the body.
+
+## Step 5a: saturating add and subtract
+
+| Instruction | funct7 | funct3 | Operation |
+|---|---|---|---|
+| `sadd rd, rs1, rs2` | 0000000 | 100 | rd = sat32(rs1 + rs2) |
+| `ssub rd, rs1, rs2` | 0000001 | 100 | rd = sat32(rs1 − rs2) |
+
+Custom-0, R-type, computed in EX in `dsp_unit.v` (a 33-bit add, clamped), written through `WB_DSP`. They do not
+touch `acc`. `tests/directed/dsp_mac.S` cases 12–14 cover:
+- results in range, exactly at either limit, and beyond each;
+- 0 − (−2³¹);
+- a result forwarded into the next `sadd` and into a branch.
+
+### Benchmarks
+
+**Biquad IIR.** Two second-order sections in cascade (a 4th-order Butterworth low-pass, Q14 coefficients),
+direct form I, 256 samples, rounded and saturated to Q15 per section. The C uses a 32-bit sum; `gen_data.py`
+checks that no partial sum overflows it. With Xbrvdsp each output is:
+- `acc.set`;
+- three `mac` and two `msu`;
+- one `acc.rdh rd, 14`, which rounds, shifts and saturates.
+
+**Saturating mix.** z[i] = sat32(p[i] + q[i]) over 256 Q31 samples, of which 62 saturate. The C uses
+`__builtin_add_overflow` and a branch; with Xbrvdsp it is one `sadd`.
+
+| Kernel (warm caches) | Cycles | Per unit | Main remaining loss |
+|---|---|---|---|
+| biquad, plain C | 15,434 | 30.1 per sample per section | mispredicts: 1,032 cycles (the saturation tests) |
+| **biquad, `mac`/`msu`/`acc.rdh`** | **7,749** | **15.1** (2.0×) | none to speak of: IPC 1.00 |
+| mix, plain C | 5,742 | 22.4 per sample | D-cache misses: 1,664 cycles; mispredicts 284 |
+| mix, `sadd` | 4,238 | 16.6 per sample | D-cache misses: 1,664 cycles |
+
+The mix is memory-bound. Three 1 KB arrays stream through the 2 KB two-way D-cache, and they map onto the same
+sets, so the loads keep missing. Without the D-cache waits, the kernels take 3,584 and 2,080 cycles (1.7×). The
+biquad with Xbrvdsp retires one instruction every cycle. Packing the state for `dmac`, and a hardware loop over
+the samples, would shorten it further.

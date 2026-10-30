@@ -183,6 +183,44 @@ int64_t energy_q15_agu2(const int16_t *x, int n)
   return acc_rd40();
 }
 
+/* The FIR with dmac: two taps per instruction from aligned word loads.
+   y[n] = sum_k h[k] x[n+k]. For even n, the pairs (x[n+k], x[n+k+1]) are
+   aligned words, and so are (h[k], h[k+1]). For odd n they are not; instead
+   start one sample early, at the aligned x[n-1], against a copy of the
+   coefficients shifted by one, hs = (0, h[0], ..., h[taps-1], 0): the extra
+   products are with the zeros. Both arrays are 4-byte aligned, and x has
+   zeros after its last sample (gen_data.py). taps is a multiple of 4. */
+__attribute__((noipa))
+void fir_q15_dmac(const int16_t *x, const int16_t *h, int16_t *y, int outs, int taps)
+{
+  static int16_t hs[FIR_TAPS + 4] __attribute__((aligned(4)));
+  hs[0] = 0;
+  for (int k = 0; k < taps; k++)
+    hs[k + 1] = h[k];
+  hs[taps + 1] = hs[taps + 2] = hs[taps + 3] = 0;
+
+  AR_CFG(0, 4);
+  AR_CFG(1, 4);
+  for (int n = 0; n < outs; n++) {
+    int odd = n & 1;
+    AR_SET(0, x + n - odd);
+    AR_SET(1, odd ? hs : h);
+    acc_set(0);
+    /* pairs: taps/2, or taps/2 + 1 for odd n; run in twos (taps/4 or
+       taps/4 + 1 iterations: an odd n's last pair pads with zeros) */
+    for (int i = 0; i < taps / 4 + odd; i++) {
+      int32_t x0, h0, x1, h1;
+      LW_A(x0, 0);
+      LW_A(h0, 1);
+      LW_A(x1, 0);
+      LW_A(h1, 1);
+      dmac(x0, h0);
+      dmac(x1, h1);
+    }
+    y[n] = (int16_t)acc_rdh15();
+  }
+}
+
 static int16_t fir_y[FIR_OUTS];
 
 static int fir_ok(void)
@@ -265,6 +303,13 @@ int main(void)
     e = energy_q15_agu2(energy_x, ENERGY_N);
     if (r) BENCH_MARK(35); else BENCH_MARK(33);
     if (e != energy_expect) return 12;
+  }
+  for (int r = 0; r < 2; r++) {
+    for (int n = 0; n < FIR_OUTS; n++) fir_y[n] = 0;
+    if (r) BENCH_MARK(38); else BENCH_MARK(36);
+    fir_q15_dmac(fir_x, fir_h, fir_y, FIR_OUTS, FIR_TAPS);
+    if (r) BENCH_MARK(39); else BENCH_MARK(37);
+    if (!fir_ok()) return 13;
   }
 
   return 0;

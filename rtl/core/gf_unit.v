@@ -38,19 +38,23 @@ module gf_unit (
       poly <= a[7:0];
   end
 
-  // red[j] = x^(8+j) mod P
-  wire [7:0] red [0:6];
-  assign red[0] = poly;
-  genvar j;
-  generate
-    for (j = 1; j < 7; j = j + 1) begin : g_red
-      assign red[j] = {red[j-1][6:0], 1'b0} ^ (red[j-1][7] ? poly : 8'h00);
-    end
-  endgenerate
+  // red_j = x^(8+j) mod P: each is the one before times x
+  function [7:0] xtime;
+    input [7:0] v, pl;
+    xtime = {v[6:0], 1'b0} ^ (v[7] ? pl : 8'h00);
+  endfunction
+
+  wire [7:0] red0 = poly;
+  wire [7:0] red1 = xtime(red0, poly);
+  wire [7:0] red2 = xtime(red1, poly);
+  wire [7:0] red3 = xtime(red2, poly);
+  wire [7:0] red4 = xtime(red3, poly);
+  wire [7:0] red5 = xtime(red4, poly);
+  wire [7:0] red6 = xtime(red5, poly);
 
   function [7:0] gfmul;
     input [7:0] x, y;
-    input [55:0] r;              // red[6..0], packed
+    input [55:0] r;              // red6..red0, packed
     reg   [14:0] p;
     integer k;
     begin
@@ -63,7 +67,7 @@ module gf_unit (
     end
   endfunction
 
-  wire [55:0] red_p = {red[6], red[5], red[4], red[3], red[2], red[1], red[0]};
+  wire [55:0] red_p = {red6, red5, red4, red3, red2, red1, red0};
 
   always @(*) begin
     case (funct7)

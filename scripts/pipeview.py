@@ -65,6 +65,7 @@ class Cycle:
          self.fencei) = (int(x) for x in c[:15])
         self.trap_cause = int(c[15], 16)
         self.mul_use = int(c[16]) if len(c) > 16 else 0   # absent in older traces
+        self.csr_use = int(c[17]) if len(c) > 17 else 0
 
     def events(self):
         """What happened this cycle, as short tags."""
@@ -77,6 +78,8 @@ class Cycle:
             ev.append("load-use")
         if self.mul_use and not self.mem_stall:
             ev.append("mul-use")
+        if self.csr_use and not self.mem_stall:
+            ev.append("csr-use")
         if self.muldiv_busy:
             ev.append("muldiv")
         if self.mispredict:
@@ -331,7 +334,8 @@ def lost_cycles(cycles, occupancy):
                     return "I-cache miss" if p.imem_stall else "straddle fetch"
             elif stage == "EX":
                 if p.flush_ex and not p.mem_stall:
-                    return redirect(p) if p.flush_id else "mul-use" if p.mul_use and not p.load_use else "load-use"
+                    return redirect(p) if p.flush_id else \
+                        "load-use" if p.load_use else "mul-use" if p.mul_use else "csr-use" if p.csr_use else "load-use"
                 if not p.stall_ex and not p.mem_stall:
                     stage = "ID"
             elif stage == "MEM":
@@ -426,9 +430,9 @@ def cmd_diagram(args):
         tag = {"squashed": f" (squashed: {ins.cause})", "trapped": " (trapped)"}.get(ins.fate, "")
         print(f"{ins.pc:08x} {text[:26]:<26} {''.join(row)}{tag}")
     # One mark per cycle: the event that explains the most
-    PRIORITY = ("irq", "trap", "mret", "fence.i", "mispredict", "load-use", "mul-use", "muldiv",
+    PRIORITY = ("irq", "trap", "mret", "fence.i", "mispredict", "load-use", "mul-use", "csr-use", "muldiv",
                 "dcache-miss", "icache-miss")
-    marks = {"icache-miss": "I", "dcache-miss": "D", "load-use": "L", "mul-use": "U", "muldiv": "B",
+    marks = {"icache-miss": "I", "dcache-miss": "D", "load-use": "L", "mul-use": "U", "csr-use": "C", "muldiv": "B",
              "mispredict": "P", "trap": "T", "irq": "Q", "mret": "R", "fence.i": "F"}
     row = []
     for n in range(lo, hi + 1):
@@ -437,7 +441,7 @@ def cmd_diagram(args):
     print(f"{'events':>8} {'':<26} {''.join(row)}")
     print("\nF D X M W = IF ID EX MEM WB; lower case = held in that stage; * = squashed, ! = trapped")
     print("events: I icache miss, D dcache miss, L load-use bubble, U mul-use bubble, B divide busy,")
-    print("        P mispredict,")
+    print("        C csr-use bubble, P mispredict,")
     print("        T trap, Q interrupt, R mret, F fence.i")
     return 0
 
@@ -497,7 +501,7 @@ def main():
         p.add_argument("--from", dest="start", type=int, default=0)
         p.add_argument("--cycles", type=int, default=0)
         p.add_argument("--event", help="start just before the first cycle with this event "
-                       "(icache-miss, dcache-miss, load-use, mul-use, muldiv, mispredict, trap, irq, mret, "
+                       "(icache-miss, dcache-miss, load-use, mul-use, csr-use, muldiv, mispredict, trap, irq, mret, "
                        "fence.i, forward)")
         p.add_argument("--skip", type=int, default=0, help="with --event: skip this many occurrences")
         if name == "json":

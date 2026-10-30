@@ -360,6 +360,95 @@ void mix_q31_sadd(int32_t *z, const int32_t *p, const int32_t *q, int n)
     z[i] = sadd(p[i], q[i]);
 }
 
+/* FFT (64-point complex, Q15; gen_data.py gives the exact algorithm). Each
+   sample is a word: re in the low half, im in the high. */
+static inline uint32_t cpack(int32_t re, int32_t im)
+{
+  return ((uint32_t)im << 16) | ((uint32_t)re & 0xFFFF);
+}
+static inline int32_t sat16(int32_t v)
+{
+  return v > 32767 ? 32767 : v < -32768 ? -32768 : v;
+}
+
+/* Bit-reversed copy, Gold-Rader: j counts in reverse */
+__attribute__((noipa))
+void fft_bitrev(uint32_t *y, const uint32_t *x, int n)
+{
+  int j = 0;
+  for (int i = 0; i < n; i++) {
+    y[i] = x[j];
+    int k = n >> 1;
+    while (j & k) {
+      j ^= k;
+      k >>= 1;
+    }
+    j |= k;
+  }
+}
+
+/* The butterflies: log2(n) stages, each output halved */
+__attribute__((noipa))
+void fft_stages(uint32_t *y, int n)
+{
+  for (int len = 2, step = n / 2; len <= n; len <<= 1, step >>= 1) {
+    int half = len >> 1;
+    for (int s = 0; s < n; s += len)
+      for (int j = 0; j < half; j++) {
+        int32_t wr = fft_wr[j * step], wi = fft_wi[j * step];
+        uint32_t a = y[s + j], b = y[s + j + half];
+        int32_t ar = (int16_t)a, ai = (int16_t)(a >> 16);
+        int32_t br = (int16_t)b, bi = (int16_t)(b >> 16);
+        int32_t tr = sat16((br * wr - bi * wi + (1 << 14)) >> 15);
+        int32_t ti = sat16((br * wi + bi * wr + (1 << 14)) >> 15);
+        y[s + j]        = cpack((ar + tr) >> 1, (ai + ti) >> 1);
+        y[s + j + half] = cpack((ar - tr) >> 1, (ai - ti) >> 1);
+      }
+  }
+}
+
+#define AR_MODE(n, m) __asm__ volatile (".insn r CUSTOM_1, 0, 3, x" #n ", %0, x0" :: "r" (m))
+
+/* Bit-reversed copy with an address register in bit-reversed mode: x must be
+   aligned to its size (n words) */
+__attribute__((noipa))
+void fft_bitrev_agu(uint32_t *y, const uint32_t *x, int n)
+{
+  AR_SET(0, x);
+  AR_CFG(0, n / 2 * 4);                          /* half the buffer, in bytes */
+  AR_MODE(0, 1);
+  for (int i = 0; i < n; i++) {
+    uint32_t w;
+    LW_A(w, 0);
+    y[i] = w;
+  }
+  AR_MODE(0, 0);
+}
+
+/* The butterflies with dmac: each part of t = b w is one dmac against a
+   packed twiddle, (wr, -wi) for the real part and (wi, wr) for the
+   imaginary, rounded and saturated by acc.rdh */
+__attribute__((noipa))
+void fft_stages_dmac(uint32_t *y, int n)
+{
+  for (int len = 2, step = n / 2; len <= n; len <<= 1, step >>= 1) {
+    int half = len >> 1;
+    for (int s = 0; s < n; s += len)
+      for (int j = 0; j < half; j++) {
+        uint32_t a = y[s + j], b = y[s + j + half];
+        acc_set(0);
+        dmac(b, fft_wa[j * step]);
+        int32_t tr = acc_rdh15();
+        acc_set(0);
+        dmac(b, fft_wb[j * step]);
+        int32_t ti = acc_rdh15();
+        int32_t ar = (int16_t)a, ai = (int16_t)(a >> 16);
+        y[s + j]        = cpack((ar + tr) >> 1, (ai + ti) >> 1);
+        y[s + j + half] = cpack((ar - tr) >> 1, (ai - ti) >> 1);
+      }
+  }
+}
+
 static int16_t fir_y[FIR_OUTS];
 
 static int fir_ok(void)
@@ -489,6 +578,25 @@ int main(void)
     if (k == 3) BENCH_MARK(55);
     for (int i = 0; i < MIX_N; i++)
       if (mz[i] != mix_expect[i]) return 20 + k;
+  }
+
+  /* Step 5b: the FFT, plain C then Xbrvdsp; each run once cold, unmeasured */
+  static uint32_t fy[FFT_N];
+  for (int k = 0; k < 4; k++) {
+    if (k == 1) BENCH_MARK(56);
+    if (k == 3) BENCH_MARK(58);
+    if (k < 2) fft_bitrev(fy, fft_x, FFT_N);
+    else       fft_bitrev_agu(fy, fft_x, FFT_N);
+    if (k == 1) BENCH_MARK(57);
+    if (k == 3) BENCH_MARK(59);
+    if (k == 1) BENCH_MARK(60);
+    if (k == 3) BENCH_MARK(62);
+    if (k < 2) fft_stages(fy, FFT_N);
+    else       fft_stages_dmac(fy, FFT_N);
+    if (k == 1) BENCH_MARK(61);
+    if (k == 3) BENCH_MARK(63);
+    for (int i = 0; i < FFT_N; i++)
+      if (fy[i] != fft_expect[i]) return 24 + k;
   }
 
   return 0;

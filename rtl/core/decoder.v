@@ -187,9 +187,9 @@ module decoder (
       end
 
       OP_CUSTOM1: begin
-        if (funct3 == 3'b000 && (funct7 == 7'b0000000 || funct7 == 7'b0000001) &&
+        if (funct3 == 3'b000 && (funct7 == 7'b0000000 || funct7 == 7'b0000001 || funct7 == 7'b0000011) &&
             rs2_addr == 5'd0 && rd_addr[4:2] == 3'b000)
-          ;                                           // ar.set, ar.cfg
+          ;                                           // ar.set, ar.cfg, ar.mode
         else if (funct3 == 3'b000 && funct7 == 7'b0000010 && rs2_addr == 5'd0 && rd_addr[4:1] == 4'b0000)
           ;                                           // lp.set, lp.sets
         else if (funct3 == 3'b110 && rd_addr == 5'd0 && instr[31:20] == 12'd0)
@@ -204,8 +204,9 @@ module decoder (
           ctrl[`CTRL_MEM_WIDTH] = funct3[1:0];
           ctrl[`CTRL_MEM_SIGN]  = ~funct3[2];
         end else if (funct3 == 3'b011 && rs1_addr == 5'd0 &&
-                     (instr[31:23] == 9'd0 || instr[31:20] == 12'd8 || instr[31:20] == 12'd9)) begin
-          ctrl[`CTRL_REG_WR]    = 1'b1;               // ar.rd, ar.rds, lp.rd
+                     (instr[31:23] == 9'd0 || instr[31:20] == 12'd8 || instr[31:20] == 12'd9 ||
+                      instr[31:22] == 10'b0000000011)) begin
+          ctrl[`CTRL_REG_WR]    = 1'b1;               // ar.rd, ar.rds, ar.rdm, lp.rd
           ctrl[`CTRL_WB_SEL]    = WB_AGU;
         end else
           ctrl[`CTRL_ILLEGAL] = 1'b1;

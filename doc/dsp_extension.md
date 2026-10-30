@@ -13,7 +13,7 @@ project's own.
 | 3 | Two taps per `dmac` in the FIR, from aligned word loads (software only: no new hardware was needed) | **done** |
 | 4 | Hardware loop: the loop-back folded into the body's last instruction (`dmac.lp`, `lp.end`) | **done** |
 | 5a | Saturating add and subtract; biquad IIR and saturating-mix benchmarks | **done** |
-| 5b | Bit-reversed addressing; radix-2 FFT benchmark | planned |
+| 5b | Bit-reversed addressing; radix-2 FFT benchmark | **done** |
 
 ## Step 1: the multiply-accumulate unit
 
@@ -102,8 +102,10 @@ All use the custom-1 major opcode (`0101011`). N is the register number, 0–3.
 | `lh.a rd, arN` | I | funct3 001, rs1 = 0, imm = N | rd = sext(mem16[addr]); addr += stride |
 | `lw.a rd, arN` | I | funct3 010, rs1 = 0, imm = N | rd = mem32[addr]; addr += stride |
 | `lhu.a rd, arN` | I | funct3 101, rs1 = 0, imm = N | rd = zext(mem16[addr]); addr += stride |
+| `ar.mode arN, rs1` | R | funct3 000, funct7 0000011, rd = N, rs2 = 0 | bit-reversed mode = rs1[0] (step 5b) |
 | `ar.rd rd, arN` | I | funct3 011, rs1 = 0, imm = N | rd = addr |
 | `ar.rds rd, arN` | I | funct3 011, rs1 = 0, imm = N + 4 | rd = sext(stride) |
+| `ar.rdm rd, arN` | I | funct3 011, rs1 = 0, imm = N + 12 | rd = bit-reversed mode (step 5b) |
 
 The load funct3 values are the base ISA's (`lh`, `lw`, `lhu`), so the decoder reuses the width and sign fields.
 A misaligned access traps like a base load (mcause 4, mtval = the address) and leaves the address register
@@ -298,3 +300,51 @@ The mix is memory-bound. Three 1 KB arrays stream through the 2 KB two-way D-cac
 sets, so the loads keep missing. Without the D-cache waits, the kernels take 3,584 and 2,080 cycles (1.7×). The
 biquad with Xbrvdsp retires one instruction every cycle. Packing the state for `dmac`, and a hardware loop over
 the samples, would shorten it further.
+
+## Step 5b: bit-reversed addressing
+
+`ar.mode arN, rs1` sets an address register's bit-reversed mode (rs1[0]); `ar.rdm` reads it back. In that mode
+a load steps the low 16 bits of the address by reverse-carry addition. The carry runs from high bits to low and
+stops at the element size: the address bits below the element (bit 0 for `lh.a`/`lhu.a`, bits 1:0 for `lw.a`)
+keep their value.
+
+  addr[15:0] = rev16(rev16(addr[15:0]) + rev16(stride)), bits below the element unchanged
+
+With stride = N/2 elements (in bytes), and the buffer aligned to its size, successive loads visit elements 0,
+N/2, N/4, 3N/4, … in bit-reversed order, as an FFT's input needs, and wrap back to element 0. In hardware it is
+two bit reversals (wiring), one 16-bit adder and a multiplexer.
+
+The mode is a separate instruction, not a bit of `ar.cfg`'s operand. The first version put it in rs1[16], and
+the existing test with a negative stride (−4, so rs1[16] = 1) turned it on by accident. The carry rule was
+also found by the tests: without it, the step after the last element of a halfword table carried into bit 0
+and gave an odd address. Spike's model has the same rule, so the lockstep check covers it too.
+
+Tests (`tests/directed/dsp_agu.S` cases 11–14):
+- 8 halfwords in the order 0 4 2 6 1 5 3 7, then the wrap back to 0;
+- 4 words (0 2 1 3, then 0);
+- the mode read back, kept by `ar.cfg` even with a negative stride, and cleared;
+- all 1024 points of a 1024-element table, against a bit reversal computed in software.
+
+### FFT benchmark
+
+A 64-point complex radix-2 decimation-in-time FFT in Q15. Each sample is one word, with re in the low half and
+im in the high half. A bit-reversed copy comes first, then 6 stages of 32 butterflies, halving each output.
+`gen_data.py` runs the same integer algorithm in Python to produce the expected output.
+
+With Xbrvdsp:
+- **The copy** loads through an address register in bit-reversed mode.
+- **Each half of the twiddle product t = b·w** is one `dmac` against a packed twiddle: (wr, −wi) gives
+  br·wr − bi·wi, and (wi, wr) gives br·wi + bi·wr. `acc.rdh rd, 15` rounds and saturates it. The twiddles are
+  clamped to ±32767, so −wi fits in 16 bits.
+
+| Part (warm caches) | Plain C | Xbrvdsp |
+|---|---|---|
+| bit-reversed copy | 1,205 cycles (18.8 per point; Gold–Rader reverse counter) | **605** (9.5 per point) |
+| 6 stages of butterflies | 10,536 cycles (54.9 per butterfly) | **8,412** (43.8) |
+| whole FFT | 11,741 | **9,017** (1.3×) |
+
+The butterfly gains little. Of its ~35 instructions in the inner loop, the twiddle product is now 8 (four
+loads of operands and twiddles, two `acc.set`, two `dmac`, two `acc.rdh`). About 20 unpack the halves, add,
+subtract, halve and repack. The next instructions worth adding are packed halving adds and subtracts on two
+16-bit halves (as in the RISC-V P extension's `radd16`/`rsub16`): then a butterfly's outputs are one
+instruction each.

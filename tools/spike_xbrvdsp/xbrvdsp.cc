@@ -30,6 +30,10 @@
 //   lhu.a rd, arN      funct3 101, rs1 0, imm N    rd = zext(mem16[addr]); addr += stride
 //   ar.rd  rd, arN     funct3 011, rs1 0, imm N      rd = addr
 //   ar.rds rd, arN     funct3 011, rs1 0, imm N + 4  rd = sext(stride)
+//   ar.rdm rd, arN     funct3 011, rs1 0, imm N + 12 rd = bit-reversed mode
+//   ar.mode arN, rs1   funct7 0000011, funct3 000, rd N, rs2 0   mode = rs1[0]
+// In bit-reversed mode a load steps
+// addr[15:0] = rev16(rev16(addr[15:0]) + rev16(stride)).
 // A load that traps (misaligned) leaves its address register unchanged.
 //
 // Hardware loop: lc (count) and lp_start. The body's last instruction is
@@ -55,6 +59,7 @@
 static int64_t acc;                       // one hart
 static uint32_t ar_addr[4];
 static int16_t  ar_stride[4];
+static bool     ar_br[4];
 static uint32_t lc, lp_start;
 
 static reg_t loop_next(reg_t pc)          // after a loop-end instruction
@@ -208,7 +213,26 @@ static reg_t x_acc_rdh(processor_t* p, insn_t insn, reg_t pc)
 static unsigned ar_set_n(insn_t insn) { return insn.rd() & 3; }
 static unsigned ar_imm_n(insn_t insn) { return insn.i_imm() & 3; }
 
-static void ar_step(unsigned n) { ar_addr[n] += (uint32_t)(int32_t)ar_stride[n]; }
+static uint16_t rev16(uint16_t v)
+{
+  uint16_t r = 0;
+  for (int k = 0; k < 16; k++)
+    if (v & (1u << k)) r |= 1u << (15 - k);
+  return r;
+}
+
+static void ar_step(unsigned n, unsigned size)   // size: the load's bytes
+{
+  if (ar_br[n]) {
+    // reverse-carry add; the carry stops at the element size
+    uint16_t lo = rev16((uint16_t)(rev16(ar_addr[n] & 0xFFFF) + rev16((uint16_t)ar_stride[n])));
+    uint16_t below = (uint16_t)(size - 1);
+    lo = (uint16_t)((lo & ~below) | (ar_addr[n] & below));
+    ar_addr[n] = (ar_addr[n] & 0xFFFF0000u) | lo;
+  } else {
+    ar_addr[n] += (uint32_t)(int32_t)ar_stride[n];
+  }
+}
 
 static reg_t x_ar_set(processor_t* p, insn_t insn, reg_t pc)
 {
@@ -227,7 +251,7 @@ static reg_t x_lh_a(processor_t* p, insn_t insn, reg_t pc)
   unsigned n = ar_imm_n(insn);
   reg_t v = MMU.load<int16_t>(ar_addr[n]);   // traps before the step if misaligned
   WRITE_RD(sext32(v));
-  ar_step(n);
+  ar_step(n, 2);
   return pc + 4;
 }
 
@@ -236,7 +260,7 @@ static reg_t x_lw_a(processor_t* p, insn_t insn, reg_t pc)
   unsigned n = ar_imm_n(insn);
   reg_t v = MMU.load<int32_t>(ar_addr[n]);
   WRITE_RD(sext32(v));
-  ar_step(n);
+  ar_step(n, 4);
   return pc + 4;
 }
 
@@ -245,7 +269,19 @@ static reg_t x_lhu_a(processor_t* p, insn_t insn, reg_t pc)
   unsigned n = ar_imm_n(insn);
   reg_t v = MMU.load<uint16_t>(ar_addr[n]);
   WRITE_RD(v);
-  ar_step(n);
+  ar_step(n, 2);
+  return pc + 4;
+}
+
+static reg_t x_ar_mode(processor_t* p, insn_t insn, reg_t pc)
+{
+  ar_br[ar_set_n(insn)] = RS1 & 1;
+  return pc + 4;
+}
+
+static reg_t x_ar_rdm(processor_t* p, insn_t insn, reg_t pc)
+{
+  WRITE_RD(ar_br[ar_imm_n(insn)] ? 1 : 0);
   return pc + 4;
 }
 
@@ -295,10 +331,12 @@ class xbrvdsp_t : public extension_t
       {0x0000200B, 0xFE0FF07F, ALL(x_acc_rdh)},
       {0x0000002B, 0xFFF07E7F, ALL(x_ar_set)},
       {0x0200002B, 0xFFF07E7F, ALL(x_ar_cfg)},
+      {0x0600002B, 0xFFF07E7F, ALL(x_ar_mode)},
       {0x0000102B, 0xFFCFF07F, ALL(x_lh_a)},
       {0x0000202B, 0xFFCFF07F, ALL(x_lw_a)},
       {0x0000502B, 0xFFCFF07F, ALL(x_lhu_a)},
       {0x0000302B, 0xFF8FF07F, ALL(x_ar_rd)},
+      {0x00C0302B, 0xFFCFF07F, ALL(x_ar_rdm)},
       {0x0000400B, 0xFE00707F, ALL(x_sadd)},
       {0x0200400B, 0xFE00707F, ALL(x_ssub)},
       {0x8000000B, 0xFE007FFF, ALL(x_mac_lp)},
@@ -324,11 +362,13 @@ class xbrvdsp_t : public extension_t
       new disasm_insn_t("acc.rdh", 0x0000200B, 0xFE0FF07F, {&xrd, &xsh}),
       new disasm_insn_t("ar.set",  0x0000002B, 0xFFF07E7F, {&xar_rd, &xrs1}),
       new disasm_insn_t("ar.cfg",  0x0200002B, 0xFFF07E7F, {&xar_rd, &xrs1}),
+      new disasm_insn_t("ar.mode", 0x0600002B, 0xFFF07E7F, {&xar_rd, &xrs1}),
       new disasm_insn_t("lh.a",    0x0000102B, 0xFFCFF07F, {&xrd, &xar_imm}),
       new disasm_insn_t("lw.a",    0x0000202B, 0xFFCFF07F, {&xrd, &xar_imm}),
       new disasm_insn_t("lhu.a",   0x0000502B, 0xFFCFF07F, {&xrd, &xar_imm}),
       new disasm_insn_t("ar.rd",   0x0000302B, 0xFFCFF07F, {&xrd, &xar_imm}),
       new disasm_insn_t("ar.rds",  0x0040302B, 0xFFCFF07F, {&xrd, &xar_imm}),
+      new disasm_insn_t("ar.rdm",  0x00C0302B, 0xFFCFF07F, {&xrd, &xar_imm}),
       new disasm_insn_t("sadd",    0x0000400B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
       new disasm_insn_t("ssub",    0x0200400B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
       new disasm_insn_t("mac.lp",  0x8000000B, 0xFE007FFF, {&xrs1, &xrs2}),
@@ -346,7 +386,7 @@ class xbrvdsp_t : public extension_t
   void reset(processor_t &) override
   {
     acc = 0;
-    for (int i = 0; i < 4; i++) { ar_addr[i] = 0; ar_stride[i] = 0; }
+    for (int i = 0; i < 4; i++) { ar_addr[i] = 0; ar_stride[i] = 0; ar_br[i] = false; }
     lc = 0;
     lp_start = 0;
   }

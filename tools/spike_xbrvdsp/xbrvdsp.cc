@@ -18,6 +18,9 @@
 //   acc.rdx rd         funct7 0000001, funct3 011, rs1 0, rs2 0  rd = sext(acc[39:32])
 //   sadd rd, rs1, rs2  funct7 0000000, funct3 100   rd = sat32(rs1 + rs2)
 //   ssub rd, rs1, rs2  funct7 0000001, funct3 100   rd = sat32(rs1 - rs2)
+//   radd16 rd, rs1, rs2  funct7 0000010, funct3 100  per 16-bit half: (rs1 + rs2) >> 1
+//   rsub16 rd, rs1, rs2  funct7 0000011, funct3 100  per half: (rs1 - rs2) >> 1
+//   pk16 rd, rs1, rs2    funct7 0000100, funct3 100  rd = {rs1[15:0], rs2[15:0]}
 // lo/hi are the signed 16-bit halves; sh is the rs2 field (0-31); rnd is
 // 2^(sh-1), or 0 when sh is 0.
 //
@@ -165,6 +168,31 @@ static reg_t x_sadd(processor_t* p, insn_t insn, reg_t pc)
 static reg_t x_ssub(processor_t* p, insn_t insn, reg_t pc)
 {
   WRITE_RD(sat32((int64_t)(int32_t)RS1 - (int32_t)RS2));
+  return pc + 4;
+}
+
+static reg_t halves(reg_t a, reg_t b, bool sub)
+{
+  int32_t lo = sub ? lo16(a) - lo16(b) : lo16(a) + lo16(b);
+  int32_t hi = sub ? hi16(a) - hi16(b) : hi16(a) + hi16(b);
+  return sext32(((uint32_t)(hi >> 1) << 16) | ((uint32_t)(lo >> 1) & 0xFFFF));
+}
+
+static reg_t x_radd16(processor_t* p, insn_t insn, reg_t pc)
+{
+  WRITE_RD(halves(RS1, RS2, false));
+  return pc + 4;
+}
+
+static reg_t x_rsub16(processor_t* p, insn_t insn, reg_t pc)
+{
+  WRITE_RD(halves(RS1, RS2, true));
+  return pc + 4;
+}
+
+static reg_t x_pk16(processor_t* p, insn_t insn, reg_t pc)
+{
+  WRITE_RD(sext32(((RS1 & 0xFFFF) << 16) | (RS2 & 0xFFFF)));
   return pc + 4;
 }
 
@@ -339,6 +367,9 @@ class xbrvdsp_t : public extension_t
       {0x00C0302B, 0xFFCFF07F, ALL(x_ar_rdm)},
       {0x0000400B, 0xFE00707F, ALL(x_sadd)},
       {0x0200400B, 0xFE00707F, ALL(x_ssub)},
+      {0x0400400B, 0xFE00707F, ALL(x_radd16)},
+      {0x0600400B, 0xFE00707F, ALL(x_rsub16)},
+      {0x0800400B, 0xFE00707F, ALL(x_pk16)},
       {0x8000000B, 0xFE007FFF, ALL(x_mac_lp)},
       {0x8200000B, 0xFE007FFF, ALL(x_dmac_lp)},
       {0x8400000B, 0xFE007FFF, ALL(x_msu_lp)},
@@ -371,6 +402,9 @@ class xbrvdsp_t : public extension_t
       new disasm_insn_t("ar.rdm",  0x00C0302B, 0xFFCFF07F, {&xrd, &xar_imm}),
       new disasm_insn_t("sadd",    0x0000400B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
       new disasm_insn_t("ssub",    0x0200400B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
+      new disasm_insn_t("radd16",  0x0400400B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
+      new disasm_insn_t("rsub16",  0x0600400B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
+      new disasm_insn_t("pk16",    0x0800400B, 0xFE00707F, {&xrd, &xrs1, &xrs2}),
       new disasm_insn_t("mac.lp",  0x8000000B, 0xFE007FFF, {&xrs1, &xrs2}),
       new disasm_insn_t("dmac.lp", 0x8200000B, 0xFE007FFF, {&xrs1, &xrs2}),
       new disasm_insn_t("msu.lp",  0x8400000B, 0xFE007FFF, {&xrs1, &xrs2}),

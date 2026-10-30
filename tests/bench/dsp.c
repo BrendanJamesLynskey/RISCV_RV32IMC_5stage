@@ -449,6 +449,48 @@ void fft_stages_dmac(uint32_t *y, int n)
   }
 }
 
+/* Packed halves (step 5c) */
+static inline uint32_t pk16(int32_t hi, int32_t lo)
+{
+  uint32_t r;
+  __asm__ (".insn r CUSTOM_0, 4, 4, %0, %1, %2" : "=r" (r) : "r" (hi), "r" (lo));
+  return r;
+}
+static inline uint32_t radd16(uint32_t a, uint32_t b)
+{
+  uint32_t r;
+  __asm__ (".insn r CUSTOM_0, 4, 2, %0, %1, %2" : "=r" (r) : "r" (a), "r" (b));
+  return r;
+}
+static inline uint32_t rsub16(uint32_t a, uint32_t b)
+{
+  uint32_t r;
+  __asm__ (".insn r CUSTOM_0, 4, 3, %0, %1, %2" : "=r" (r) : "r" (a), "r" (b));
+  return r;
+}
+
+/* The butterflies with dmac for t = b w, then t packed and the two outputs
+   one halving add and one halving subtract, on both halves at once */
+__attribute__((noipa))
+void fft_stages_packed(uint32_t *y, int n)
+{
+  for (int len = 2, step = n / 2; len <= n; len <<= 1, step >>= 1) {
+    int half = len >> 1;
+    for (int s = 0; s < n; s += len)
+      for (int j = 0; j < half; j++) {
+        uint32_t a = y[s + j], b = y[s + j + half];
+        acc_set(0);
+        dmac(b, fft_wa[j * step]);
+        int32_t tr = acc_rdh15();
+        acc_set(0);
+        dmac(b, fft_wb[j * step]);
+        uint32_t t = pk16(acc_rdh15(), tr);
+        y[s + j]        = radd16(a, t);
+        y[s + j + half] = rsub16(a, t);
+      }
+  }
+}
+
 static int16_t fir_y[FIR_OUTS];
 
 static int fir_ok(void)
@@ -597,6 +639,14 @@ int main(void)
     if (k == 3) BENCH_MARK(63);
     for (int i = 0; i < FFT_N; i++)
       if (fy[i] != fft_expect[i]) return 24 + k;
+  }
+  for (int k = 0; k < 2; k++) {
+    fft_bitrev_agu(fy, fft_x, FFT_N);
+    if (k == 1) BENCH_MARK(64);
+    fft_stages_packed(fy, FFT_N);
+    if (k == 1) BENCH_MARK(65);
+    for (int i = 0; i < FFT_N; i++)
+      if (fy[i] != fft_expect[i]) return 28 + k;
   }
 
   return 0;

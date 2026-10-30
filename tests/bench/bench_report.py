@@ -31,7 +31,8 @@ KERNELS = [(0, "fir, cold caches", 64 * 16, "tap"), (2, "fir", 64 * 16, "tap"),
            (48, "biquad", 2 * 256, "sample"), (50, "biquad_mac", 2 * 256, "sample"),
            (52, "mix", 256, "sample"), (54, "mix_sadd", 256, "sample"),
            (56, "fft_bitrev", 64, "point"), (58, "fft_bitrev_agu", 64, "point"),
-           (60, "fft_stages", 6 * 32, "bfly"), (62, "fft_stages_dmac", 6 * 32, "bfly")]
+           (60, "fft_stages", 6 * 32, "bfly"), (62, "fft_stages_dmac", 6 * 32, "bfly"),
+           (64, "fft_stages_packed", 6 * 32, "bfly")]
 
 
 def marker(raw):

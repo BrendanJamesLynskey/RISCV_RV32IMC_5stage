@@ -8,7 +8,7 @@ A synthesisable RV32IMC RISC-V SoC implemented in Verilog-2001. Features a class
 
 | Category | Detail |
 |---|---|
-| **ISA** | RV32IMC — Base Integer, Multiply/Divide, Compressed — plus **Xbrvdsp**, its own DSP extension (multiply-accumulate into a 40-bit accumulator, address generators that load and step a pointer in one instruction, and a hardware loop; [doc/dsp_extension.md](doc/dsp_extension.md)) |
+| **ISA** | RV32IMC — Base Integer, Multiply/Divide, Compressed — plus **Xbrvdsp**, its own DSP extension (multiply-accumulate into a 40-bit accumulator, address generators that load and step a pointer in one instruction (linear or bit-reversed), a hardware loop, and saturating and packed-halves arithmetic; [doc/dsp_extension.md](doc/dsp_extension.md)) |
 | **Pipeline** | 5-stage (IF / ID / EX / MEM / WB), in-order |
 | **Hazards** | Full data forwarding; load-use and mul-use stalls; flush on misprediction |
 | **Branch prediction** | 2-bit saturating BHT + Branch Target Buffer (BTB) |
@@ -235,39 +235,42 @@ back to the event that made it).
 
 | Kernel (warm caches) | What it computes | Cycles | Per unit | IPC | Main remaining loss |
 |---|---|---|---|---|---|
-| `fir` | 16-tap Q15 FIR, 64 outputs, 32-bit accumulator, rounded and saturated | 9,397 | 9.18 per tap | 0.87 | mul-use bubbles, one per tap: 1,024 cycles |
-| `energy` | Sum of squares of 256 Q15 samples, 64-bit accumulator | 2,861 | 11.18 per sample | 0.90 | mul-use bubbles: 256 cycles |
-| `fir_mac` | The FIR with Xbrvdsp: `mac` per tap, `acc.rdh` to round and saturate | 7,999 | 7.81 per tap | 0.85 | load-use bubbles, one per tap: 1,024 cycles |
+| `fir` | 16-tap Q15 FIR, 64 outputs, 32-bit accumulator, rounded and saturated | 9,396 | 9.18 per tap | 0.87 | mul-use bubbles, one per tap: 1,024 cycles |
+| `energy` | Sum of squares of 256 Q15 samples, 64-bit accumulator | 2,848 | 11.12 per sample | 0.90 | mul-use bubbles: 256 cycles |
+| `fir_mac` | The FIR with Xbrvdsp: `mac` per tap, `acc.rdh` to round and saturate | 7,985 | 7.80 per tap | 0.85 | load-use bubbles, one per tap: 1,024 cycles |
 | `energy_mac` | The energy with `mac`, read back exactly from the 40-bit accumulator | 1,329 | 5.19 per sample | 0.78 | load-use bubbles: 256 cycles |
 | `energy_dmac` | The energy with `dmac`: two samples per instruction from one 32-bit load | 806 | 3.15 per sample | 0.81 | load-use bubbles: 128 cycles |
-| `fir_agu` | `fir_mac` with both pointers in address registers: `lh.a`, `lh.a`, `mac` per tap | 7,092 | 6.93 per tap | 0.82 | load-use bubbles, one per tap: 1,024 cycles |
-| `fir_agu2` | The same, two taps per iteration, all four loads ahead of the MACs | 5,044 | 4.93 per tap | 0.96 | inner-loop exit mispredicts: 134 cycles |
+| `fir_agu` | `fir_mac` with both pointers in address registers: `lh.a`, `lh.a`, `mac` per tap | 7,104 | 6.94 per tap | 0.82 | load-use bubbles, one per tap: 1,024 cycles |
+| `fir_agu2` | The same, two taps per iteration, all four loads ahead of the MACs | 5,043 | 4.92 per tap | 0.96 | inner-loop exit mispredicts: 134 cycles |
 | `energy_agu` | `energy_dmac` with `lw.a` | 681 | 2.66 per sample | 0.78 | load-use bubbles: 128 cycles |
-| `energy_agu2` | The same, four samples per iteration | 425 | 1.66 per sample | 0.95 | I-cache misses: 13 cycles |
-| `fir_dmac` | The FIR two taps per `dmac`, all loads aligned words (odd outputs use a shifted copy of the taps) | 3,844 | 3.75 per tap | 0.92 | inner-loop exit mispredicts: 200 cycles |
-| `fir_lp` | `fir_dmac` with the inner loop in hardware: four `lw.a`, `dmac`, `dmac.lp` | 3,268 | 3.19 per tap | 0.91 | mispredicts (loop exit, even/odd test): 264 cycles |
+| `energy_agu2` | The same, four samples per iteration | 439 | 1.71 per sample | 0.92 | I-cache misses: 13 cycles |
+| `fir_dmac` | The FIR two taps per `dmac`, all loads aligned words (odd outputs use a shifted copy of the taps) | 3,843 | 3.75 per tap | 0.92 | inner-loop exit mispredicts: 200 cycles |
+| `fir_lp` | `fir_dmac` with the inner loop in hardware: four `lw.a`, `dmac`, `dmac.lp` | 3,267 | 3.19 per tap | 0.91 | mispredicts (loop exit, even/odd test): 264 cycles |
 | `energy_lp` | `energy_agu2` as a hardware loop: two `lw.a`, `dmac`, `dmac.lp` | 295 | 1.15 per sample | 0.93 | I-cache misses: 13 cycles |
-| `biquad` | Two-section Q14 biquad IIR (direct form I), 256 samples, plain C | 15,434 | 30.1 per sample per section | 0.90 | mispredicts: 1,032 cycles |
-| `biquad_mac` | The same with `mac`, `msu` and `acc.rdh` | 7,749 | 15.1 per sample per section | 1.00 | — |
-| `mix` | Saturating Q31 add, 256 samples, plain C (`__builtin_add_overflow`) | 5,742 | 22.4 per sample | 0.53 | D-cache misses: 1,664 cycles |
-| `mix_sadd` | The same with `sadd` | 4,238 | 16.6 per sample | 0.49 | D-cache misses: 1,664 cycles |
-| `fft_bitrev` | 64-point FFT input permutation, plain C (Gold–Rader reverse counter) | 1,205 | 18.8 per point | 0.78 | mispredicts: 216 cycles |
-| `fft_bitrev_agu` | The same, loading through an address register in bit-reversed mode | 605 | 9.5 per point | 0.56 | D-cache waits: 195 cycles |
-| `fft_stages` | 64-point complex Q15 FFT, 6 stages of radix-2 butterflies, plain C | 10,536 | 54.9 per butterfly | 0.89 | D-cache waits: 492 cycles |
-| `fft_stages_dmac` | The same, each half of the twiddle product one `dmac` against a packed twiddle | 8,412 | 43.8 per butterfly | 0.86 | D-cache waits: 685 cycles |
+| `biquad` | Two-section Q14 biquad IIR (direct form I), 256 samples, plain C | 15,459 | 30.19 per sample per section | 0.90 | mispredicts: 1,032 cycles |
+| `biquad_mac` | The same with `mac`, `msu` and `acc.rdh` | 7,775 | 15.19 per sample per section | 0.99 | — |
+| `mix` | Saturating Q31 add, 256 samples, plain C (`__builtin_add_overflow`) | 5,949 | 23.24 per sample | 0.51 | D-cache waits: 2,379 cycles |
+| `mix_sadd` | The same with `sadd` | 4,458 | 17.41 per sample | 0.46 | D-cache waits: 2,379 cycles |
+| `fft_bitrev` | 64-point FFT input permutation, plain C (Gold–Rader reverse counter) | 1,164 | 18.19 per point | 0.80 | mispredicts: 216 cycles |
+| `fft_bitrev_agu` | The same, loading through an address register in bit-reversed mode | 436 | 6.81 per point | 0.78 | load-use bubbles: 64 cycles |
+| `fft_stages` | 64-point complex Q15 FFT, 6 stages of radix-2 butterflies, plain C | 10,549 | 54.94 per butterfly | 0.89 | D-cache waits: 505 cycles |
+| `fft_stages_dmac` | The same, each half of the twiddle product one `dmac` against a packed twiddle | 8,152 | 42.46 per butterfly | 0.89 | load-use bubbles: 384 cycles |
+| `fft_stages_packed` | The same, then `pk16` packs t and `radd16`/`rsub16` give both outputs, on both halves at once | 5,271 | 27.45 per butterfly | 0.86 | load-use bubbles: 385 cycles |
 
 The extension removes the 64-bit carry chain from the energy kernel (3.5× with `dmac`) and the multiply, add
 and saturation code from the FIR. With `mac` alone the FIR gains 15%, because GCC puts each load directly
 before the `mac` that uses it, costing a load-use bubble per tap. The address generators (step 2) remove the
-pointer increments; written two taps per iteration, with the loads ahead of the MACs, the FIR runs at 4.93
-cycles per tap and the energy at 1.66 per sample (6.7× the plain C). With two taps per `dmac` the FIR reaches
+pointer increments; written two taps per iteration, with the loads ahead of the MACs, the FIR runs at 4.92
+cycles per tap and the energy at 1.71 per sample (6.5× the plain C). With two taps per `dmac` the FIR reaches
 3.75 per tap (2.4×); odd outputs, whose sample pairs are not aligned, start a sample early against a copy of
 the coefficients shifted by one ([doc/dsp_extension.md](doc/dsp_extension.md), step 3). The hardware loop
 (step 4) folds the loop-back into the body's last `dmac`, predicted like a branch: the FIR reaches 3.19 cycles
 per tap (2.9×) and the energy 1.15 per sample (9.7×). The biquad halves with `mac`/`msu`/`acc.rdh` (step 5a);
-the saturating mix gains less because it is memory-bound (its three arrays conflict in the D-cache). The FFT gains
-1.3× (bit-reversed addressing halves its permutation; `dmac` with packed twiddles shortens the butterflies, which
-are then dominated by unpacking and repacking 16-bit halves). The benchmarks are compiled with
+the saturating mix gains less because it is memory-bound (its three arrays conflict in the D-cache). The FFT
+(step 5b) gains 2.05×: bit-reversed addressing cuts its permutation by 2.7×, `dmac` against packed twiddles
+computes each half of the twiddle product in one instruction, and packed halving adds and subtracts (step 5c)
+make each butterfly output one instruction. Memory-bound kernels move by a few percent when the data layout
+changes (an added array shifts the D-cache conflicts); the table is from the latest build. The benchmarks are compiled with
 `-falign-loops=4`, so that no loop starts with a 32-bit instruction at 2 mod 4, which costs a fetch bubble
 on every jump back.
 
@@ -299,7 +302,7 @@ accumulator, post-increment loads and a zero-overhead loop would remove most of 
 |---|---|---|
 | riscv-tests `rv32ui`, `rv32um`, `rv32uc` | Every RV32I, M and C instruction, with bypass and hazard cases | all pass |
 | The same `rv32ui`/`rv32um` sources assembled **with C** | Mixed 16/32-bit code: 32-bit instructions straddling words, branches sharing a word | all pass |
-| Directed (`tests/directed`) | The DSP extension (every instruction, rounding, saturation, 40-bit wrap and readback; a MAC interrupted in EX leaves the accumulator untouched; the address generators' strides, extension, readback and precise misaligned traps, and interrupted `lw.a` loops; `sadd`/`ssub` at and across both limits; bit-reversed addressing (8, 4 and 1024 points, and the wrap); hardware loops of 0 to many passes, one-instruction bodies, branches and compressed code in the body, save and restore around an inner loop, and interrupts at the loop end); a multiply's result used by the next instruction in every role (rs1, rs2, branch, store data, load address, JALR target, MAC operand, the next multiply); FENCE.I on cached code, and in the cycle an I-cache fill completes; misaligned-access traps; timer interrupts (cause, and nothing lost or run twice) | all pass |
+| Directed (`tests/directed`) | The DSP extension (every instruction, rounding, saturation, 40-bit wrap and readback; a MAC interrupted in EX leaves the accumulator untouched; the address generators' strides, extension, readback and precise misaligned traps, and interrupted `lw.a` loops; `sadd`/`ssub` at and across both limits; `radd16`/`rsub16`/`pk16` at the extremes; bit-reversed addressing (8, 4 and 1024 points, and the wrap); hardware loops of 0 to many passes, one-instruction bodies, branches and compressed code in the body, save and restore around an inner loop, and interrupts at the loop end); a multiply's result used by the next instruction in every role (rs1, rs2, branch, store data, load address, JALR target, MAC operand, the next multiply); FENCE.I on cached code, and in the cycle an I-cache fill completes; misaligned-access traps; timer interrupts (cause, and nothing lost or run twice) | all pass |
 | Lockstep with Spike | Every ISA and directed test except `timer_irq` and `dsp_irq` (Spike has no timer; both check themselves), compared instruction by instruction; tests of the DSP extension use its Spike model (`tools/spike_xbrvdsp`) | all match |
 | Pipeline trace | Every ISA and directed test: the rebuilt pipeline matches the RTL's stage registers every cycle, and its retirements match the retire trace | all check |
 | SoC testbench + cocotb | Directed SoC program: GPIO, UART byte, caches, predictor training, ECALL | 30/30, 14/14 |
@@ -430,17 +433,18 @@ Artix-7 on a Digilent Nexys A7-100T; 100 MHz target. Whole SoC, with the 32 KB S
 
 | Resource | Used | Available | |
 |---|---|---|---|
-| LUTs | 8,855 | 63,400 | 14.0% (the cache arrays are LUT RAM; the DSP unit is 351, the AGU 192, the loop unit 120) |
-| Registers | 7,757 | 126,800 | 6.1% |
+| LUTs | 8,940 | 63,400 | 14.1% (the cache arrays are LUT RAM; the DSP unit is 377, the AGU 192, the loop unit 120) |
+| Registers | 7,763 | 126,800 | 6.1% |
 | Block RAM (36 Kb) | 8 | 135 | the 32 KB SRAM |
 | DSP48 | 7 | 240 | 4 for the 33×33 multiplier, 3 for the DSP unit's two 16×16 multipliers |
-| **Fmax** | **65.5 MHz** | | WNS −5.3 ns at 10 ns |
+| **Fmax** | **62.2 MHz** | | WNS −6.1 ns at 10 ns |
 
-**Critical path** (19 logic levels, 15.3 ns): the next-PC loop, from `pc_if` through the I-cache tag and data
-LUT-RAM reads, the RV32C alignment and the PC increment, back into `pc_if`. The worst path moves between runs,
-and the others sit close to it, all around 15 ns. In the step 5a run it was a CSR read of `mip` in MEM, forwarded
-into a branch in EX and on to the mispredict flush's enables. In the step 2 run it was fetch into the IF/ID
-register. Fetching, aligning and
+**Critical path** (24 logic levels, 16.0 ns): a CSR read in MEM, forwarded into EX. Its value was `mip`, straight
+from a peripheral's interrupt line. From there it passes through a branch-target add and the mispredict logic
+into the ID/EX register. In the step 5b run the worst path was the next-PC loop (15.3 ns). The CSR forwarding
+path is a structural problem: a CSR's value is only known in MEM, yet it is forwarded combinationally into EX.
+The fix is the one used for the multiply. A CSR result goes to a dependent instruction from WB, after a
+one-cycle interlock. Fetching, aligning and
 predicting in one cycle is what limits the clock now; splitting fetch into two stages is the next step for Fmax.
 
 **How it got here.**
@@ -455,7 +459,8 @@ predicting in one cycle is what limits the clock now; splitting fetch into two s
 | Xbrvdsp step 2 (address generators) | 66.3 MHz | fetch: I-cache read, alignment, into the IF/ID register; the AGU cost 197 LUTs and 192 registers |
 | Xbrvdsp step 4 (hardware loop) | 65.9 MHz | the next-PC loop; the loop unit cost 120 LUTs and 64 registers |
 | Xbrvdsp step 5a (`sadd`, `ssub`) | 65.0 MHz | a CSR read in MEM (`mip`, from a peripheral's interrupt line) forwarded into a branch in EX, to the mispredict flush's enables: an existing path, not through `sadd`; `sadd`/`ssub` cost 32 LUTs |
-| Xbrvdsp step 5b (bit-reversed addressing) | **65.5 MHz** | the next-PC loop again; the mode cost the AGU 40 LUTs and 4 registers |
+| Xbrvdsp step 5b (bit-reversed addressing) | 65.5 MHz | the next-PC loop again; the mode cost the AGU 40 LUTs and 4 registers |
+| Xbrvdsp step 5c (packed halves) | **62.2 MHz** | the CSR-read forwarding path again, now 16.0 ns: a peripheral's interrupt line into `mip`, read in MEM, forwarded into EX, through a branch target and the mispredict, into the ID/EX register; the packed halves cost 26 LUTs, off that path |
 
 Moving the multiply also cut the DSP48s from 15 to 7: the old RTL wrote three 64-bit products (signed × signed,
 signed × unsigned, unsigned × unsigned), and Vivado built each. One 33×33 signed multiply with the operands

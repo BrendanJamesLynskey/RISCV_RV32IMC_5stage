@@ -7,7 +7,8 @@
  * Covered: mac, dmac, msu, acc.set; rounding; 32- and 16-bit saturation;
  * the 8 guard bits (sums beyond 32 bits, and wrapping at 40 bits);
  * operands that arrive by forwarding and after a load-use bubble; sadd and
- * ssub at and across both saturation limits (step 5).
+ * ssub at and across both saturation limits (step 5a); radd16, rsub16 and pk16
+ * on both halves, with signs, the extremes, and rounding down (step 5c).
  */
 
 #include "riscv_test.h"
@@ -24,6 +25,9 @@
 #define ACC_RDX(d)     .insn r CUSTOM_0, 3, 1, d, x0, x0
 #define SADD(d, a, b)  .insn r CUSTOM_0, 4, 0, d, a, b
 #define SSUB(d, a, b)  .insn r CUSTOM_0, 4, 1, d, a, b
+#define RADD16(d, a, b) .insn r CUSTOM_0, 4, 2, d, a, b
+#define RSUB16(d, a, b) .insn r CUSTOM_0, 4, 3, d, a, b
+#define PK16(d, a, b)   .insn r CUSTOM_0, 4, 4, d, a, b
 
 #define CHECK(n, reg, value) \
   li TESTNUM, n; li t6, value; bne reg, t6, fail
@@ -187,6 +191,43 @@ RVTEST_CODE_BEGIN
   li      t6, 0x7fffffff
   SADD(a2, t0, t0)
   bne     a2, t6, fail
+
+  # 15: radd16: each half separately, signed, halved (rounding down)
+  li      t0, 0x0003fffd          # hi 3, lo -3
+  li      t1, 0x00040002          # hi 4, lo 2
+  RADD16(a0, t0, t1)              # hi (3+4)>>1 = 3, lo (-3+2)>>1 = -1
+  CHECK(15, a0, 0x0003ffff)
+  li      t0, 0x7fff7fff          # the extremes: no overflow
+  RADD16(a0, t0, t0)
+  CHECK(15, a0, 0x7fff7fff)
+  li      t0, 0x80008000
+  RADD16(a0, t0, t0)
+  CHECK(15, a0, 0x80008000)
+  li      t1, 0x7fff7fff
+  RADD16(a0, t0, t1)              # (-32768 + 32767) >> 1 = -1 in both
+  CHECK(15, a0, 0xffffffff)
+
+  # 16: rsub16, including -32768 - 32767 (needs the 17th bit)
+  li      t0, 0x00050003          # hi 5, lo 3
+  li      t1, 0x00020008          # hi 2, lo 8
+  RSUB16(a0, t0, t1)              # hi 3>>1 = 1, lo -5>>1 = -3
+  CHECK(16, a0, 0x0001fffd)
+  li      t0, 0x80007fff
+  li      t1, 0x7fff8000
+  RSUB16(a0, t0, t1)              # hi (-32768-32767)>>1 = -32768, lo (32767+32768)>>1 = 32767
+  CHECK(16, a0, 0x80007fff)
+
+  # 17: pk16: low halves of rs1 (to the top) and rs2 (to the bottom), and
+  # the result forwarded straight into radd16
+  li      t0, 0x1234abcd
+  li      t1, 0x5678ef01
+  PK16(a0, t0, t1)
+  CHECK(17, a0, 0xabcdef01)
+  li      t0, 2
+  li      t1, 4
+  PK16(a1, t0, t1)                # (2, 4)
+  RADD16(a2, a1, a1)              # (2, 4)
+  CHECK(17, a2, 0x00020004)
 
   TEST_PASSFAIL
 

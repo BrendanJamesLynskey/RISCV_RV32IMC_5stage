@@ -494,6 +494,10 @@ void fft_stages_packed(uint32_t *y, int n)
 /* SHA-256 (sha256.c, plain; sha256_zk.c, Zbkb and Zknh) */
 void sha256(const uint8_t *msg, int len, uint32_t h[8]);
 void sha256_zk(const uint8_t *msg, int len, uint32_t h[8]);
+/* AES-128 encryption (aes.c, plain; aes_zk.c, Zkne) */
+void aes128_enc(uint8_t *out, const uint8_t *in, const uint8_t *rk, int blocks);
+void aes128_enc_zk(uint32_t *out, const uint32_t *in, const uint32_t *rk, int blocks);
+void aes128_enc_t(uint32_t *out, const uint32_t *in, const uint32_t *rk, int blocks);
 
 static int16_t fir_y[FIR_OUTS];
 
@@ -665,6 +669,24 @@ int main(void)
     if (k == 3) BENCH_MARK(69);
     for (int i = 0; i < 8; i++)
       if (dg[i] != sha_expect[i]) return 30 + k;
+  }
+
+  /* Zk: AES-128 encryption of 256 bytes: byte-oriented C, T-table C, then
+     Zkne; each run cold first, unmeasured */
+  static uint8_t act[16 * AES_BLOCKS] __attribute__((aligned(4)));
+  for (int k = 0; k < 6; k++) {
+    for (int i = 0; i < 16 * AES_BLOCKS; i++) act[i] = 0;
+    if (k == 1) BENCH_MARK(70);
+    if (k == 5) BENCH_MARK(72);
+    if (k == 3) BENCH_MARK(74);
+    if (k < 2)      aes128_enc(act, aes_pt, aes_rk, AES_BLOCKS);
+    else if (k < 4) aes128_enc_t((uint32_t *)act, (const uint32_t *)aes_pt, (const uint32_t *)aes_rk, AES_BLOCKS);
+    else            aes128_enc_zk((uint32_t *)act, (const uint32_t *)aes_pt, (const uint32_t *)aes_rk, AES_BLOCKS);
+    if (k == 1) BENCH_MARK(71);
+    if (k == 5) BENCH_MARK(73);
+    if (k == 3) BENCH_MARK(75);
+    for (int i = 0; i < 16 * AES_BLOCKS; i++)
+      if (act[i] != aes_expect[i]) return 34 + k;
   }
 
   return 0;

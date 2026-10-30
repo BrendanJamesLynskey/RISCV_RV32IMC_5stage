@@ -25,6 +25,8 @@ fft:    64-point complex radix-2 decimation-in-time FFT, Q15, each sample a
         Twiddles w = exp(-2 pi i k / 64), Q15, clamped to +-32767. Inputs are at
         a quarter of full scale, so no intermediate value overflows 16 bits.
 sha256: the digest of a 256-byte message (hashlib), as eight words.
+aes:    AES-128 encryption (ECB) of 256 bytes. The model below is checked
+        against the FIPS-197 example (key 000102..0f) before use.
 """
 import hashlib
 import math
@@ -106,6 +108,52 @@ def fft_q15(x, tw):
     return y
 
 
+def aes_gmul(a, b):
+    r = 0
+    while b:
+        if b & 1:
+            r ^= a
+        a = ((a << 1) ^ 0x11B) if a & 0x80 else a << 1
+        b >>= 1
+    return r
+
+
+def aes_sbox():
+    inv = [0] * 256
+    for x in range(1, 256):
+        inv[x] = next(y for y in range(1, 256) if aes_gmul(x, y) == 1)
+    rot = lambda v, n: ((v << n) | (v >> (8 - n))) & 0xFF
+    return [b ^ rot(b, 1) ^ rot(b, 2) ^ rot(b, 3) ^ rot(b, 4) ^ 0x63 for b in inv]
+
+
+def aes128(key, data):
+    """(round keys, ciphertext) of data (a multiple of 16 bytes), ECB."""
+    sb = aes_sbox()
+    rk, rcon = list(key), 1
+    while len(rk) < 176:
+        t = rk[-4:]
+        if len(rk) % 16 == 0:
+            t = [sb[x] for x in t[1:] + t[:1]]
+            t[0] ^= rcon
+            rcon = aes_gmul(rcon, 2)
+        rk += [a ^ b for a, b in zip(rk[-16:-12], t)]
+    out = []
+    for i in range(0, len(data), 16):
+        s = [a ^ b for a, b in zip(data[i:i + 16], rk[:16])]
+        for r in range(1, 11):
+            s = [sb[s[4 * ((c + j) % 4) + j]] for c in range(4) for j in range(4)]
+            if r < 10:
+                m = []
+                for c in range(4):
+                    a = s[4 * c:4 * c + 4]
+                    m += [aes_gmul(a[j], 2) ^ aes_gmul(a[(j + 1) % 4], 3) ^ a[(j + 2) % 4] ^ a[(j + 3) % 4]
+                          for j in range(4)]
+                s = m
+            s = [a ^ b for a, b in zip(s, rk[16 * r:16 * r + 16])]
+        out += s
+    return rk, out
+
+
 def biquad(x, sections):
     for b0, b1, b2, a1, a2 in sections:
         y, x1, x2, y1, y2 = [], 0, 0, 0, 0
@@ -179,6 +227,20 @@ def main():
     print(f"\n#define SHA_LEN {len(msg)}\n")
     print(arr("sha_msg", "uint8_t", list(msg)))
     print(arr("sha_expect", "uint32_t", [int.from_bytes(dig[i:i + 4], "big") for i in range(0, 32, 4)]))
+
+    _, fips = aes128(bytes(range(16)), bytes.fromhex("00112233445566778899aabbccddeeff"))
+    assert bytes(fips).hex() == "69c4e0d86a7b0430d8cdb78070b4c55a", "AES model fails FIPS-197"
+    ga = lcg(23)
+    akey = bytes(next(ga) & 0xFF for _ in range(16))
+    apt = bytes(next(ga) & 0xFF for _ in range(256))
+    ark, act = aes128(akey, apt)
+    print(f"\n#define AES_BLOCKS {len(apt) // 16}\n")
+    sb = aes_sbox()
+    print(arr("aes_sbox", "uint8_t", sb))
+    print(arr("aes_t0", "uint32_t", [(aes_gmul(s, 3) << 24) | (s << 16) | (s << 8) | aes_gmul(s, 2) for s in sb]))
+    print(arr("aes_rk", "uint8_t __attribute__((aligned(4)))", ark))
+    print(arr("aes_pt", "uint8_t __attribute__((aligned(4)))", list(apt)))
+    print(arr("aes_expect", "uint8_t", act))
 
 
 if __name__ == "__main__":

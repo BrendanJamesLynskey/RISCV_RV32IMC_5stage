@@ -47,7 +47,7 @@ module decoder (
     endcase
   end
 
-  // ── Zbkb and Zknh (scalar cryptography): computed by zk_unit.v ──────
+  // ── Zbkb, Zknh, Zkne, Zknd (scalar cryptography): zk_unit.v ─────────
   wire [11:0] imm12 = instr[31:20];
   wire is_zk =
     (opcode == OP_REG &&
@@ -55,7 +55,9 @@ module decoder (
        (funct7 == 7'b0100000 && (funct3 == 3'b111 || funct3 == 3'b110 || funct3 == 3'b100)) || // andn, orn, xnor
        (funct7 == 7'b0000100 && (funct3 == 3'b100 || funct3 == 3'b111)) ||                   // pack, packh
        (funct3 == 3'b000 && (funct7 == 7'h28 || funct7 == 7'h29 || funct7 == 7'h2a ||        // sha512*
-                             funct7 == 7'h2b || funct7 == 7'h2e || funct7 == 7'h2f)))) ||
+                             funct7 == 7'h2b || funct7 == 7'h2e || funct7 == 7'h2f)) ||
+       (funct3 == 3'b000 && (funct7[4:0] == 5'b10001 || funct7[4:0] == 5'b10011 ||           // aes32*: bs in
+                             funct7[4:0] == 5'b10101 || funct7[4:0] == 5'b10111)))) ||       // funct7[6:5]
     (opcode == OP_IMM &&
       ((funct3 == 3'b101 && (funct7 == 7'b0110000 ||                                         // rori
                              imm12 == 12'h687 || imm12 == 12'h698 || imm12 == 12'h08f)) ||   // brev8, rev8, unzip

@@ -9,10 +9,10 @@ project's own.
 | Step | Adds | Status |
 |---|---|---|
 | 1 | Multiply-accumulate: `mac`, `dmac`, `msu`, accumulator access | **done** |
-| 2 | Address generators: loads with post-increment and bit-reversed addressing | planned |
+| 2 | Address generators: loads that step a pointer register (bit-reversed addressing comes with the FFT, step 5) | **done** |
 | 3 | Packed loads for `dmac` in the FIR | planned |
 | 4 | Zero-overhead hardware loop | planned |
-| 5 | Saturating add and subtract; biquad IIR and radix-2 FFT benchmarks | planned |
+| 5 | Saturating add and subtract; bit-reversed addressing; biquad IIR and radix-2 FFT benchmarks | planned |
 
 ## Step 1: the multiply-accumulate unit
 
@@ -82,3 +82,84 @@ the read path (round, shift, saturate). It sits in EX beside the ALU and takes t
   - operands arriving by forwarding and after a load-use bubble;
   - back-to-back MACs.
 - The DSP benchmarks check their results against Python-computed values, and run in lockstep with Spike.
+
+## Step 2: address generators
+
+### State
+
+Four address registers, `ar0`–`ar3`. Each holds a 32-bit address and a signed 16-bit stride in bytes. Both
+reset to 0.
+
+### Instructions
+
+All use the custom-1 major opcode (`0101011`). N is the register number, 0–3.
+
+| Instruction | Format | Fields | Operation |
+|---|---|---|---|
+| `ar.set arN, rs1` | R | funct3 000, funct7 0000000, rd = N, rs2 = 0 | addr = rs1 |
+| `ar.cfg arN, rs1` | R | funct3 000, funct7 0000001, rd = N, rs2 = 0 | stride = rs1[15:0] |
+| `lh.a rd, arN` | I | funct3 001, rs1 = 0, imm = N | rd = sext(mem16[addr]); addr += stride |
+| `lw.a rd, arN` | I | funct3 010, rs1 = 0, imm = N | rd = mem32[addr]; addr += stride |
+| `lhu.a rd, arN` | I | funct3 101, rs1 = 0, imm = N | rd = zext(mem16[addr]); addr += stride |
+| `ar.rd rd, arN` | I | funct3 011, rs1 = 0, imm = N | rd = addr |
+| `ar.rds rd, arN` | I | funct3 011, rs1 = 0, imm = N + 4 | rd = sext(stride) |
+
+The load funct3 values are the base ISA's (`lh`, `lw`, `lhu`), so the decoder reuses the width and sign fields.
+A misaligned access traps like a base load (mcause 4, mtval = the address) and leaves the address register
+unchanged, so the load runs correctly again after the handler. Any other encoding in custom-1 is illegal.
+
+Why address registers, not a post-increment form of the base loads: a post-increment load writes two registers
+(the data and the pointer), and the register file has one write port. Dedicated registers need no second port,
+and give bit-reversed and circular addressing a home later.
+
+From C:
+
+```c
+#define AR_SET(n, p) __asm__ volatile (".insn r CUSTOM_1, 0, 0, x" #n ", %0, x0" :: "r" (p) : "memory")
+#define LH_A(r, n)   __asm__ volatile (".insn i CUSTOM_1, 1, %0, x0, " #n : "=r" (r))
+```
+
+### Micro-architecture
+
+`rtl/core/agu.v` holds the registers. It follows the accumulator's rules:
+- **The registers change as the instruction moves from EX to MEM, and only then.** They don't change while
+  the pipeline is held, if a trap flushes the instruction, or if the load is misaligned.
+- **A load reads its address register in EX**, after every older update, so back-to-back loads on one register
+  need no forwarding.
+
+The load's address replaces the ALU result on the way to MEM. From there it is an ordinary load: the
+same alignment check, the same D-cache access, the same load-use interlock.
+
+### Verification
+
+- The Spike model (`tools/spike_xbrvdsp`) implements the registers and instructions, so every test that uses
+  them runs in lockstep.
+- `tests/directed/dsp_agu.S` covers:
+  - readback of both fields;
+  - forward and backward strides, and stride 0;
+  - sign and zero extension;
+  - independence of the four registers;
+  - back-to-back loads, and load-use;
+  - `ar.set` from a value computed the cycle before;
+  - misaligned `lw.a` and `lh.a`: the cause, the address, and that rd and the register are unchanged.
+- `tests/directed/dsp_irq.S` takes timer interrupts in a loop of `lw.a`. Every pass must end exactly one table
+  length on, and the sum must be exact.
+- Each test fails against a mutant of the RTL with its rule removed (no `!flush_mem`, no `!misaligned_ex`).
+
+### Result
+
+| Kernel (warm caches) | Cycles per unit | Inner loop |
+|---|---|---|
+| FIR, plain C | 9.18 per tap | 2 loads, 2 pointer increments, `mul`, `add`, `bne` (and a mul-use bubble) |
+| FIR, `mac` (step 1) | 7.80 per tap | 2 loads, 2 increments, `mac`, `bne`, and a load-use bubble |
+| FIR, `lh.a` + `mac` | 6.94 per tap | `lh.a`, `lh.a`, `mac`, count, `bne`, and a load-use bubble |
+| FIR, `lh.a` + `mac`, two taps per iteration | **4.93 per tap** | four `lh.a`, two `mac`, count, `bne`: no bubble |
+| Energy, `dmac` (step 1) | 3.20 per sample | |
+| Energy, `lw.a` + `dmac` | 2.66 per sample | |
+| Energy, `lw.a` + `dmac`, four samples per iteration | **1.66 per sample** | |
+
+The benchmarks are compiled with `-falign-loops=4`. With RV32C, a loop whose first instruction is 32-bit and
+starts at 2 mod 4 costs a fetch bubble on every jump back (early straddle only helps fetch in sequence); in the
+AGU kernels that was a bubble per iteration (961 cycles in the FIR). The flag affects the other kernels by under
+1%. What the FIR still loses is the inner loop's exit mispredict (two cycles per output) and its count and
+branch: the hardware loop of step 4.

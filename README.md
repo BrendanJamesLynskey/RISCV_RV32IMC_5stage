@@ -8,7 +8,7 @@ A synthesisable RV32IMC RISC-V SoC implemented in Verilog-2001. Features a class
 
 | Category | Detail |
 |---|---|
-| **ISA** | RV32IMC — Base Integer, Multiply/Divide, Compressed — with the ratified scalar-crypto extensions **Zbkb**, **Zknh**, **Zkne** and **Zknd** ([doc/crypto_extensions.md](doc/crypto_extensions.md)), plus **Xbrvdsp**, its own DSP extension (multiply-accumulate into a 40-bit accumulator, address generators that load and step a pointer in one instruction (linear or bit-reversed), a hardware loop, and saturating and packed-halves arithmetic; [doc/dsp_extension.md](doc/dsp_extension.md)) |
+| **ISA** | RV32IMC — Base Integer, Multiply/Divide, Compressed — with the ratified scalar-crypto extensions **Zbkb**, **Zbkc**, **Zbkx**, **Zknh**, **Zkne** and **Zknd** ([doc/crypto_extensions.md](doc/crypto_extensions.md)), plus **Xbrvdsp**, its own DSP extension (multiply-accumulate into a 40-bit accumulator, address generators that load and step a pointer in one instruction (linear or bit-reversed), a hardware loop, and saturating and packed-halves arithmetic; [doc/dsp_extension.md](doc/dsp_extension.md)) |
 | **Pipeline** | 5-stage (IF / ID / EX / MEM / WB), in-order |
 | **Hazards** | Full data forwarding; load-use, mul-use and csr-use stalls; flush on misprediction |
 | **Branch prediction** | 2-bit saturating BHT + Branch Target Buffer (BTB) |
@@ -72,7 +72,7 @@ RISCV_RV32IMC_5stage/
 │   │   ├── dsp_unit.v                # Xbrvdsp multiply-accumulate (40-bit accumulator)
 │   │   ├── agu.v                     # Xbrvdsp address generators (ar0-ar3)
 │   │   ├── loop_unit.v               # Xbrvdsp hardware loop (lc, lp_start)
-│   │   ├── zk_unit.v                 # Zbkb, Zknh, Zkne, Zknd (scalar cryptography)
+│   │   ├── zk_unit.v                 # Zbkb, Zbkc, Zbkx, Zknh, Zkne, Zknd (scalar cryptography)
 │   │   ├── branch_predictor.v        # 2-bit BHT + BTB
 │   │   ├── hazard_unit.v             # Forwarding and stall logic
 │   │   └── csr.v                     # Machine-mode CSRs
@@ -115,7 +115,7 @@ RISCV_RV32IMC_5stage/
 │   ├── BRV32P_Design_Report.md       # Detailed micro-architecture write-up
 │   ├── pipeline_trace.md             # The pipeline trace, its checking, and real diagrams
 │   ├── dsp_extension.md              # Xbrvdsp: encodings, semantics, micro-architecture
-│   └── crypto_extensions.md          # Zbkb, Zknh, Zkne, Zknd: implementation, tests, SHA-256 and AES
+│   └── crypto_extensions.md          # Zbkb/c/x, Zknh, Zkne, Zknd: implementation, tests, SHA-256, AES, CRC-32
 └── README.md
 ```
 
@@ -263,6 +263,8 @@ back to the event that made it).
 | `aes128` | AES-128 encryption of 256 bytes, byte-oriented C | 102,864 | 401.8 per byte | 0.91 | mispredicts: 4,590 cycles |
 | `aes128_ttable` | The same with one 1 KB T-table (the usual fast software form) | 23,775 | 92.9 per byte | 0.82 | D-cache waits: 3,965 cycles |
 | `aes128_zk` | The same with Zkne: 16 `aes32esmi` per round | 5,031 | 19.6 per byte | 0.97 | — |
+| `crc32_table` | zlib's CRC-32 of 256 bytes, table-driven C (1 KB table) | 2,834 | 11.1 per byte | 0.91 | load-use bubbles: 256 cycles |
+| `crc32_clmul` | The same a word at a time: Barrett reduction by `clmul`/`clmulh` (Zbkc) | 681 | 2.7 per byte | 0.97 | I-cache misses: 13 cycles |
 
 The extension removes the 64-bit carry chain from the energy kernel (3.5× with `dmac`) and the multiply, add
 and saturation code from the FIR. With `mac` alone the FIR gains 15%, because GCC puts each load directly
@@ -277,7 +279,8 @@ the saturating mix gains less because it is memory-bound (its three arrays confl
 (step 5b) gains about 2×: bit-reversed addressing cuts its permutation by about 2.8×, `dmac` against packed twiddles
 computes each half of the twiddle product in one instruction, and packed halving adds and subtracts (step 5c)
 make each butterfly output one instruction. SHA-256 with the ratified Zbkb and Zknh runs 1.8× faster, and
-AES-128 with Zkne 4.7× faster than T-table C ([doc/crypto_extensions.md](doc/crypto_extensions.md)). Memory-bound kernels move by a few percent when the data layout
+AES-128 with Zkne 4.7× faster than T-table C, and CRC-32 by carry-less multiply (Zbkc) 4.2× faster than
+table-driven C ([doc/crypto_extensions.md](doc/crypto_extensions.md)). Memory-bound kernels move by a few percent when the data layout
 changes (an added array shifts the D-cache conflicts); the table is from the latest build. The benchmarks are compiled with
 `-falign-loops=4`, so that no loop starts with a 32-bit instruction at 2 mod 4, which costs a fetch bubble
 on every jump back.
@@ -310,7 +313,7 @@ accumulator, post-increment loads and a zero-overhead loop would remove most of 
 |---|---|---|
 | riscv-tests `rv32ui`, `rv32um`, `rv32uc` | Every RV32I, M and C instruction, with bypass and hazard cases | all pass |
 | The same `rv32ui`/`rv32um` sources assembled **with C** | Mixed 16/32-bit code: 32-bit instructions straddling words, branches sharing a word | all pass |
-| Directed (`tests/directed`) | The DSP extension (every instruction, rounding, saturation, 40-bit wrap and readback; a MAC interrupted in EX leaves the accumulator untouched; the address generators' strides, extension, readback and precise misaligned traps, and interrupted `lw.a` loops; `sadd`/`ssub` at and across both limits; `radd16`/`rsub16`/`pk16` at the extremes; bit-reversed addressing (8, 4 and 1024 points, and the wrap); hardware loops of 0 to many passes, one-instruction bodies, branches and compressed code in the body, save and restore around an inner loop, and interrupts at the loop end); Zbkb, Zknh, Zkne and Zknd, every instruction (AES with every byte select) against Python and Spike, with forwarding; a multiply's or a CSR instruction's result used by the next instruction in every role (rs1, rs2, branch, store data, load address, JALR target, MAC operand, the next multiply or CSR instruction); FENCE.I on cached code, and in the cycle an I-cache fill completes; misaligned-access traps; timer interrupts (cause, and nothing lost or run twice) | all pass |
+| Directed (`tests/directed`) | The DSP extension (every instruction, rounding, saturation, 40-bit wrap and readback; a MAC interrupted in EX leaves the accumulator untouched; the address generators' strides, extension, readback and precise misaligned traps, and interrupted `lw.a` loops; `sadd`/`ssub` at and across both limits; `radd16`/`rsub16`/`pk16` at the extremes; bit-reversed addressing (8, 4 and 1024 points, and the wrap); hardware loops of 0 to many passes, one-instruction bodies, branches and compressed code in the body, save and restore around an inner loop, and interrupts at the loop end); Zbkb, Zbkc, Zbkx, Zknh, Zkne and Zknd, every instruction (AES with every byte select, carry-less products at the edges, permutes with out-of-range indexes) against Python and Spike, with forwarding; a multiply's or a CSR instruction's result used by the next instruction in every role (rs1, rs2, branch, store data, load address, JALR target, MAC operand, the next multiply or CSR instruction); FENCE.I on cached code, and in the cycle an I-cache fill completes; misaligned-access traps; timer interrupts (cause, and nothing lost or run twice) | all pass |
 | Lockstep with Spike | Every ISA and directed test except `timer_irq` and `dsp_irq` (Spike has no timer; both check themselves), compared instruction by instruction; tests of the DSP extension use its Spike model (`tools/spike_xbrvdsp`) | all match |
 | Pipeline trace | Every ISA and directed test: the rebuilt pipeline matches the RTL's stage registers every cycle, and its retirements match the retire trace | all check |
 | SoC testbench + cocotb | Directed SoC program: GPIO, UART byte, caches, predictor training, ECALL | 30/30, 14/14 |
@@ -442,15 +445,15 @@ Artix-7 on a Digilent Nexys A7-100T; 100 MHz target. Whole SoC, with the 32 KB S
 
 | Resource | Used | Available | |
 |---|---|---|---|
-| LUTs | 10,102 | 63,400 | 15.9% (the cache arrays are LUT RAM; the Zk unit about 1,220 with AES; the DSP unit, AGU and loop unit about 700 together) |
-| Registers | 7,762 | 126,800 | 6.1% |
+| LUTs | 10,669 | 63,400 | 16.8% (the cache arrays are LUT RAM; the Zk unit about 1,790; the DSP unit, AGU and loop unit about 700 together) |
+| Registers | 7,760 | 126,800 | 6.1% |
 | Block RAM (36 Kb) | 8 | 135 | the 32 KB SRAM |
 | DSP48 | 7 | 240 | 4 for the 33×33 multiplier, 3 for the DSP unit's two 16×16 multipliers |
-| **Fmax** | **65.3 MHz** | | WNS −5.3 ns at 10 ns |
+| **Fmax** | **64.1 MHz** | | WNS −5.6 ns at 10 ns |
 
-**Critical path** (24 logic levels, 15.3 ns, 67% routing): the next-PC loop, from the fetch stage's straddle state
-through the I-cache LUT-RAM reads, the RV32C alignment and the PC adder, back into `pc_if`. In the run before it
-was forwarding into a branch target and the mispredict logic (14.5 ns).
+**Critical path** (19 logic levels, 15.5 ns, 75% routing): fetch, from `pc_if` through the I-cache tag and data
+LUT-RAM reads and the RV32C alignment into the IF/ID register. In other runs it was the next-PC loop through the
+same reads (15.3 ns), or forwarding into a branch target and the mispredict logic (14.5 ns).
 The worst path moves between runs. Two limits take turns: fetching, aligning and predicting in one cycle, and
 resolving a branch in EX on forwarded operands. Raising Fmax much further means splitting fetch over two stages
 and taking the branch target off the forwarding path.
@@ -478,7 +481,8 @@ predicting in one cycle is what limits the clock now; splitting fetch into two s
 | Xbrvdsp step 5c (packed halves) | 62.2 MHz | the CSR-read forwarding path again, now 16.0 ns: a peripheral's interrupt line into `mip`, read in MEM, forwarded into EX, through a branch target and the mispredict, into the ID/EX register; the packed halves cost 26 LUTs, off that path |
 | CSR results forwarded from WB (csr-use interlock) | 65.6 MHz | fetch: the I-cache read and alignment into IF/ID, and the next-PC loop (the five worst paths); 54 LUTs fewer |
 | Zbkb and Zknh (`zk_unit`) | 67.4 MHz (placement noise: the unit is not on the worst path) | forwarding into a branch target and the mispredict, into the ID/EX register; Zk cost about 730 LUTs, with one rotator shared by `ror`, `rori` and `rol` (two separate rotators cost about 1,140) |
-| Zkne and Zknd (AES) | **65.3 MHz** | the next-PC loop; AES cost 489 LUTs (two S-boxes and the GF(2⁸) constant multiplies) |
+| Zkne and Zknd (AES) | 65.3 MHz | the next-PC loop; AES cost 489 LUTs (two S-boxes and the GF(2⁸) constant multiplies) |
+| Zbkc and Zbkx | **64.1 MHz** | fetch into IF/ID (15.5 ns), not the new unit; 567 LUTs, mostly the 32×32 carry-less multiplier array |
 
 Moving the multiply also cut the DSP48s from 15 to 7: the old RTL wrote three 64-bit products (signed × signed,
 signed × unsigned, unsigned × unsigned), and Vivado built each. One 33×33 signed multiply with the operands

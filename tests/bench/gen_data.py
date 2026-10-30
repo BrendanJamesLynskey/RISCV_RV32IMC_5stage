@@ -25,10 +25,14 @@ fft:    64-point complex radix-2 decimation-in-time FFT, Q15, each sample a
         Twiddles w = exp(-2 pi i k / 64), Q15, clamped to +-32767. Inputs are at
         a quarter of full scale, so no intermediate value overflows 16 bits.
 sha256: the digest of a 256-byte message (hashlib), as eight words.
+crc32:  zlib's CRC-32 of 256 bytes; the table for the table-driven C, and a
+        check that the carry-less Barrett formula crc32_zk.c uses gives zlib's
+        result.
 aes:    AES-128 encryption (ECB) of 256 bytes. The model below is checked
         against the FIPS-197 example (key 000102..0f) before use.
 """
 import hashlib
+import zlib
 import math
 
 TAPS, OUTS, NE = 16, 64, 256
@@ -154,6 +158,25 @@ def aes128(key, data):
     return rk, out
 
 
+def crc_barrett(data):
+    """CRC-32 as crc32_zk.c computes it: a word at a time, bit-reversed into
+    the normal domain, Barrett reduction by carry-less multiplies."""
+    def clmul(a, b):
+        r = 0
+        for i in range(32):
+            if (b >> i) & 1:
+                r ^= a << i
+        return r
+    rev = lambda v: int(format(v, "032b")[::-1], 2)
+    p, mu = 0x04C11DB7, 0x04D101DF
+    crc = 0xFFFFFFFF
+    for i in range(0, len(data), 4):
+        x = crc ^ rev(int.from_bytes(data[i:i + 4], "little"))
+        q = (clmul(x, mu) >> 32) ^ x
+        crc = clmul(q, p) & 0xFFFFFFFF
+    return rev(crc) ^ 0xFFFFFFFF
+
+
 def biquad(x, sections):
     for b0, b1, b2, a1, a2 in sections:
         y, x1, x2, y1, y2 = [], 0, 0, 0, 0
@@ -241,6 +264,20 @@ def main():
     print(arr("aes_rk", "uint8_t __attribute__((aligned(4)))", ark))
     print(arr("aes_pt", "uint8_t __attribute__((aligned(4)))", list(apt)))
     print(arr("aes_expect", "uint8_t", act))
+
+    gc = lcg(29)
+    cmsg = bytes(next(gc) & 0xFF for _ in range(256))
+    tab = []
+    for i in range(256):
+        c = i
+        for _ in range(8):
+            c = (c >> 1) ^ (0xEDB88320 if c & 1 else 0)
+        tab.append(c)
+    assert crc_barrett(cmsg) == zlib.crc32(cmsg), "the clmul Barrett formula disagrees with zlib"
+    print(f"\n#define CRC_LEN {len(cmsg)}\n")
+    print(arr("crc32_tab", "uint32_t", tab))
+    print(arr("crc_msg", "uint8_t __attribute__((aligned(4)))", list(cmsg)))
+    print(f"static const uint32_t crc_expect = {zlib.crc32(cmsg):#010x}u;")
 
 
 if __name__ == "__main__":

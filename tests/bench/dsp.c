@@ -498,6 +498,9 @@ void sha256_zk(const uint8_t *msg, int len, uint32_t h[8]);
 void aes128_enc(uint8_t *out, const uint8_t *in, const uint8_t *rk, int blocks);
 void aes128_enc_zk(uint32_t *out, const uint32_t *in, const uint32_t *rk, int blocks);
 void aes128_enc_t(uint32_t *out, const uint32_t *in, const uint32_t *rk, int blocks);
+/* CRC-32 (crc32.c, table-driven; crc32_zk.c, Zbkc and Zbkb) */
+uint32_t crc32_table(const uint8_t *p, int len);
+uint32_t crc32_clmul(const uint32_t *p, int len);
 
 static int16_t fir_y[FIR_OUTS];
 
@@ -687,6 +690,18 @@ int main(void)
     if (k == 3) BENCH_MARK(75);
     for (int i = 0; i < 16 * AES_BLOCKS; i++)
       if (act[i] != aes_expect[i]) return 34 + k;
+  }
+
+  /* CRC-32 of 256 bytes: table-driven, then carry-less multiply; cold first */
+  for (int k = 0; k < 4; k++) {
+    uint32_t c;
+    if (k == 1) BENCH_MARK(76);
+    if (k == 3) BENCH_MARK(78);
+    if (k < 2) c = crc32_table(crc_msg, CRC_LEN);
+    else       c = crc32_clmul((const uint32_t *)crc_msg, CRC_LEN);
+    if (k == 1) BENCH_MARK(77);
+    if (k == 3) BENCH_MARK(79);
+    if (c != crc_expect) return 40 + k;
   }
 
   return 0;

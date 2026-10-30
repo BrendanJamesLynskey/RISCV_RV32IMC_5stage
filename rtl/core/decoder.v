@@ -47,13 +47,15 @@ module decoder (
     endcase
   end
 
-  // ── Zbkb, Zknh, Zkne, Zknd (scalar cryptography): zk_unit.v ─────────
+  // ── Zbkb, Zbkc, Zbkx, Zknh, Zkne, Zknd (scalar cryptography): zk_unit.v
   wire [11:0] imm12 = instr[31:20];
   wire is_zk =
     (opcode == OP_REG &&
       ((funct7 == 7'b0110000 && (funct3 == 3'b001 || funct3 == 3'b101)) ||                   // rol, ror
        (funct7 == 7'b0100000 && (funct3 == 3'b111 || funct3 == 3'b110 || funct3 == 3'b100)) || // andn, orn, xnor
        (funct7 == 7'b0000100 && (funct3 == 3'b100 || funct3 == 3'b111)) ||                   // pack, packh
+       (funct7 == 7'b0000101 && (funct3 == 3'b001 || funct3 == 3'b011)) ||                   // clmul, clmulh
+       (funct7 == 7'b0010100 && (funct3 == 3'b010 || funct3 == 3'b100)) ||                   // xperm4, xperm8
        (funct3 == 3'b000 && (funct7 == 7'h28 || funct7 == 7'h29 || funct7 == 7'h2a ||        // sha512*
                              funct7 == 7'h2b || funct7 == 7'h2e || funct7 == 7'h2f)) ||
        (funct3 == 3'b000 && (funct7[4:0] == 5'b10001 || funct7[4:0] == 5'b10011 ||           // aes32*: bs in

@@ -432,9 +432,10 @@ Artix-7 on a Digilent Nexys A7-100T; 100 MHz target. Whole SoC, with the 32 KB S
 
 **Critical path** (20 logic levels, 15.4 ns): a CSR read in MEM, forwarded into a branch comparison in EX, and on
 through the mispredict to the pipeline registers' enables. The read was of `mip`, which comes straight from a
-peripheral's interrupt line. Close behind it are the next-PC loop (`pc_if` through the I-cache tag and data
-LUT-RAM reads, the RV32C alignment and the PC increment, back into `pc_if`; the worst path in the step 4 run)
-and fetch into the IF/ID register (the worst in the step 2 run): all within about 0.3 ns. Fetching, aligning and
+peripheral's interrupt line. The next four worst paths end at the same enables, within 0.3 ns. The worst path
+moves between runs. In the step 4 run it was the next-PC loop (`pc_if` through the I-cache tag and data LUT-RAM
+reads, the RV32C alignment and the PC increment, back into `pc_if`). In the step 2 run it was fetch into the
+IF/ID register. All of them sit around 15 ns. Fetching, aligning and
 predicting in one cycle is what limits the clock now; splitting fetch into two stages is the next step for Fmax.
 
 **How it got here.**
@@ -448,7 +449,7 @@ predicting in one cycle is what limits the clock now; splitting fetch into two s
 | Divider operand registers no longer gated by `kill` | 65.7 MHz | the next-PC loop |
 | Xbrvdsp step 2 (address generators) | 66.3 MHz | fetch: I-cache read, alignment, into the IF/ID register; the AGU cost 197 LUTs and 192 registers |
 | Xbrvdsp step 4 (hardware loop) | 65.9 MHz | the next-PC loop; the loop unit cost 120 LUTs and 64 registers |
-| Xbrvdsp step 5a (`sadd`, `ssub`) | **65.0 MHz** | a CSR read in MEM (`mip`, from a peripheral's interrupt line) forwarded into a branch in EX, to the mispredict flush: an existing path, 0.3 ns worse than the next-PC loop in this placement; `sadd`/`ssub` cost 32 LUTs |
+| Xbrvdsp step 5a (`sadd`, `ssub`) | **65.0 MHz** | a CSR read in MEM (`mip`, from a peripheral's interrupt line) forwarded into a branch in EX, to the mispredict flush's enables: an existing path, not through `sadd`; `sadd`/`ssub` cost 32 LUTs |
 
 Moving the multiply also cut the DSP48s from 15 to 7: the old RTL wrote three 64-bit products (signed × signed,
 signed × unsigned, unsigned × unsigned), and Vivado built each. One 33×33 signed multiply with the operands

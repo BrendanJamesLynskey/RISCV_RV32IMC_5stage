@@ -264,6 +264,13 @@ def main():
     print(arr("aes_rk", "uint8_t __attribute__((aligned(4)))", ark))
     print(arr("aes_pt", "uint8_t __attribute__((aligned(4)))", list(apt)))
     print(arr("aes_expect", "uint8_t", act))
+    # A second key and plaintext, for the timing comparison (Zkt)
+    akey2 = bytes(next(ga) & 0xFF for _ in range(16))
+    apt2 = bytes(next(ga) & 0xFF for _ in range(256))
+    ark2, act2 = aes128(akey2, apt2)
+    print(arr("aes_rk2", "uint8_t __attribute__((aligned(4)))", ark2))
+    print(arr("aes_pt2", "uint8_t __attribute__((aligned(4)))", list(apt2)))
+    print(arr("aes_expect2", "uint8_t", act2))
 
     gc = lcg(29)
     cmsg = bytes(next(gc) & 0xFF for _ in range(256))

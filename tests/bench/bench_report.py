@@ -35,7 +35,9 @@ KERNELS = [(0, "fir, cold caches", 64 * 16, "tap"), (2, "fir", 64 * 16, "tap"),
            (64, "fft_stages_packed", 6 * 32, "bfly"),
            (66, "sha256", 256, "byte"), (68, "sha256_zk", 256, "byte"),
            (70, "aes128", 256, "byte"), (74, "aes128_ttable", 256, "byte"), (72, "aes128_zk", 256, "byte"),
-           (76, "crc32_table", 256, "byte"), (78, "crc32_clmul", 256, "byte")]
+           (76, "crc32_table", 256, "byte"), (78, "crc32_clmul", 256, "byte"),
+           (80, "zkt: ttable, key 1", 256, "byte"), (82, "zkt: ttable, key 2", 256, "byte"),
+           (84, "zkt: zk, key 1", 256, "byte"), (86, "zkt: zk, key 2", 256, "byte")]
 
 
 def marker(raw):
@@ -66,6 +68,16 @@ def main():
         causes = Counter(lost[n] for n in range(lo + 1, hi + 1) if n in lost)
         lost_s = ", ".join(f"{k} {v}" for k, v in causes.most_common())
         print(f"{name:<22}{n_cyc:>8}{retired:>8}{retired / n_cyc:>7.2f}{n_cyc / units:>11.2f}/{unit:<6}  {lost_s}")
+
+    # Zkt-style check: the Zkne AES must take the same cycles for both keys
+    # and plaintexts (the T-table AES, for contrast, need not)
+    if all(m in at for m in (80, 81, 82, 83, 84, 85, 86, 87)):
+        t1, t2 = at[81] - at[80], at[83] - at[82]
+        z1, z2 = at[85] - at[84], at[87] - at[86]
+        print(f"\ntiming against the data, two keys and plaintexts: T-table AES {t1} and {t2} cycles; "
+              f"Zkne AES {z1} and {z2} cycles: {'equal' if z1 == z2 else 'DIFFERENT'}")
+        if z1 != z2:
+            sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -129,34 +129,34 @@ checked: against FIPS 203's NTT, its inverse (times R, as pq-crystals' `invntt` 
 
 | Kernel | Cycles | Per butterfly | vs reference | What it is |
 |---|---|---|---|---|
-| `mlkem_ntt` | 24,146 | 27.0 | | the reference forward NTT and its Barrett pass |
-| `mlkem_ntt_mq` | 7,735 | 8.6 | 3.1× | `mqmul2` by {ζ, ζ}, `mqadd2`, `mqsub2`: three instructions per two butterflies |
-| `mlkem_ntt_ct` | 6,913 | 7.7 | 3.5× | `ctadd2`, `ctsub2`: two |
-| `mlkem_ntt_ct2` | 3,897 | 4.3 | 6.2× | the same, two layers per pass |
-| `mlkem_invntt` | 34,375 | 38.4 | | the reference inverse NTT, Barrett in each butterfly, then × f |
-| `mlkem_invntt_x` | 7,799 | 8.7 | 4.4× | `gsmul2`, `mqadd2`, then × f by `ctadd2` |
-| `mlkem_invntt_x2` | 4,095 | 4.6 | 8.4× | the same, two layers per pass, × f folded into the last |
-| `mlkem_basemul` | 11,498 | 89.8 per pair | | the reference: five `fqmul` per pair of coefficients |
-| `mlkem_basemul_x` | 3,356 | 26.2 per pair | 3.4× | two `mqmul2`, a `ctadd2` with ζ = γ, an `mqadd2` and a `pack` per word |
-| `mlkem_polymul` | 94,010 | | | a·b: two NTTs, `basemul`, the inverse NTT |
-| `mlkem_polymul_x` | 15,302 | | 6.1× | the same with `ntt_ct2`, `basemul_x` and `invntt_x2` |
+| `mlkem_ntt` | 23,965 | 26.7 | | the reference forward NTT and its Barrett pass |
+| `mlkem_ntt_mq` | 7,881 | 8.8 | 3.0× | `mqmul2` by {ζ, ζ}, `mqadd2`, `mqsub2`: three instructions per two butterflies |
+| `mlkem_ntt_ct` | 7,055 | 7.9 | 3.4× | `ctadd2`, `ctsub2`: two |
+| `mlkem_ntt_ct2` | 4,041 | 4.5 | 5.9× | the same, two layers per pass |
+| `mlkem_invntt` | 34,335 | 38.3 | | the reference inverse NTT, Barrett in each butterfly, then × f |
+| `mlkem_invntt_x` | 7,837 | 8.7 | 4.4× | `gsmul2`, `mqadd2`, then × f by `ctadd2` |
+| `mlkem_invntt_x2` | 4,159 | 4.6 | 8.3× | the same, two layers per pass, × f folded into the last |
+| `mlkem_basemul` | 11,808 | 92.3 per pair | | the reference: five `fqmul` per pair of coefficients |
+| `mlkem_basemul_x` | 3,602 | 28.1 per pair | 3.3× | two `mqmul2`, a `ctadd2` with ζ = γ, an `mqadd2` and a `pack` per word |
+| `mlkem_polymul` | 93,757 | | | a·b: two NTTs, `basemul`, the inverse NTT |
+| `mlkem_polymul_x` | 15,427 | | 6.1× | the same with `ntt_ct2`, `basemul_x` and `invntt_x2` |
 
-Cycles are warm (each kernel runs once before the measured run).
+Cycles are warm (each kernel runs once before the measured run), from CI's full build.
 
 ### What limits it now: stores
 
 With the arithmetic down to one instruction per butterfly pair, stores set the pace. The D-cache is
 write-through, with a one-word write buffer, and a store waits while the one before it is still being
-written: about four cycles each. In `mlkem_ntt_ct`, 2,035 of its 6,913 cycles are such waits. Its inner loop
+written: about four cycles each. In `mlkem_ntt_ct`, 2,165 of its 7,055 cycles are such waits. Its inner loop
 is 4 loads, 4 butterfly instructions and 4 stores, and the stores come out back to back.
 
 The software answer is the one pqm4 uses on Cortex-M4: merge layers. `mlkem_ntt_ct2` does two layers per
 pass. It loads four words, j, j + h/2, j + h and j + 3h/2, runs both layers' butterflies on them in
 registers (three ζ: one for the first layer, two for the second), and stores them once. That halves the loads
 and stores. The stores are also spread between the last butterflies, each step's instructions scheduled by
-hand in one asm statement, so most of a store's write overlaps other work. The NTT goes from 6,913 to 3,897
+hand in one asm statement, so most of a store's write overlaps other work. The NTT goes from 7,055 to 4,041
 cycles. The inverse does the same, and also folds the final multiply by f = R²/128 into its last pass (a + b
-multiplied by f, b − a by ζf instead of ζ). That saves a pass over the coefficients: 7,799 to 4,095.
+multiplied by f, b − a by ζf instead of ζ). That saves a pass over the coefficients: 7,837 to 4,159.
 
 D-cache waits are still about 30% of the product's cycles. The hardware answer would be a deeper write
 buffer. That would change every benchmark in the repository, so it belongs in a change of its own, not here.

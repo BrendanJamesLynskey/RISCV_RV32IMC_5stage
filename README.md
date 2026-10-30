@@ -242,83 +242,83 @@ back to the event that made it).
 | `fir` | 16-tap Q15 FIR, 64 outputs, 32-bit accumulator, rounded and saturated | 9,409 | 9.19 per tap | 0.87 | mul-use bubbles, one per tap: 1,024 cycles |
 | `energy` | Sum of squares of 256 Q15 samples, 64-bit accumulator | 2,848 | 11.12 per sample | 0.90 | mul-use bubbles: 256 cycles |
 | `fir_mac` | The FIR with Xbrvdsp: `mac` per tap, `acc.rdh` to round and saturate | 7,998 | 7.81 per tap | 0.85 | load-use bubbles, one per tap: 1,024 cycles |
-| `energy_mac` | The energy with `mac`, read back exactly from the 40-bit accumulator | 1,317 | 5.14 per sample | 0.79 | load-use bubbles: 256 cycles |
-| `energy_dmac` | The energy with `dmac`: two samples per instruction from one 32-bit load | 806 | 3.15 per sample | 0.81 | load-use bubbles: 128 cycles |
-| `fir_agu` | `fir_mac` with both pointers in address registers: `lh.a`, `lh.a`, `mac` per tap | 7,104 | 6.94 per tap | 0.82 | load-use bubbles, one per tap: 1,024 cycles |
-| `fir_agu2` | The same, two taps per iteration, all four loads ahead of the MACs | 5,043 | 4.92 per tap | 0.96 | inner-loop exit mispredicts: 134 cycles |
+| `energy_mac` | The energy with `mac`, read back exactly from the 40-bit accumulator | 1,315 | 5.14 per sample | 0.79 | load-use bubbles: 256 cycles |
+| `energy_dmac` | The energy with `dmac`: two samples per instruction from one 32-bit load | 819 | 3.20 per sample | 0.80 | load-use bubbles: 128 cycles |
+| `fir_agu` | `fir_mac` with both pointers in address registers: `lh.a`, `lh.a`, `mac` per tap | 7,091 | 6.92 per tap | 0.82 | load-use bubbles, one per tap: 1,024 cycles |
+| `fir_agu2` | The same, two taps per iteration, all four loads ahead of the MACs | 5,056 | 4.94 per tap | 0.95 | inner-loop exit mispredicts: 134 cycles |
 | `energy_agu` | `energy_dmac` with `lw.a` | 694 | 2.71 per sample | 0.77 | load-use bubbles: 128 cycles |
 | `energy_agu2` | The same, four samples per iteration | 426 | 1.66 per sample | 0.95 | I-cache misses: 13 cycles |
-| `fir_dmac` | The FIR two taps per `dmac`, all loads aligned words (odd outputs use a shifted copy of the taps) | 3,843 | 3.75 per tap | 0.92 | inner-loop exit mispredicts: 200 cycles |
-| `fir_lp` | `fir_dmac` with the inner loop in hardware: four `lw.a`, `dmac`, `dmac.lp` | 3,267 | 3.19 per tap | 0.91 | mispredicts (loop exit, even/odd test): 264 cycles |
+| `fir_dmac` | The FIR two taps per `dmac`, all loads aligned words (odd outputs use a shifted copy of the taps) | 3,856 | 3.77 per tap | 0.92 | inner-loop exit mispredicts: 200 cycles |
+| `fir_lp` | `fir_dmac` with the inner loop in hardware: four `lw.a`, `dmac`, `dmac.lp` | 3,280 | 3.20 per tap | 0.91 | mispredicts (loop exit, even/odd test): 264 cycles |
 | `energy_lp` | `energy_agu2` as a hardware loop: two `lw.a`, `dmac`, `dmac.lp` | 295 | 1.15 per sample | 0.93 | I-cache misses: 13 cycles |
-| `biquad` | Two-section Q14 biquad IIR (direct form I), 256 samples, plain C | 15,511 | 30.29 per sample per section | 0.89 | mispredicts: 1,032 cycles |
-| `biquad_mac` | The same with `mac`, `msu` and `acc.rdh` | 7,827 | 15.29 per sample per section | 0.99 | — |
-| `mix` | Saturating Q31 add, 256 samples, plain C (`__builtin_add_overflow`) | 5,637 | 22.02 per sample | 0.54 | D-cache waits: 2,054 cycles |
+| `biquad` | Two-section Q14 biquad IIR (direct form I), 256 samples, plain C | 15,472 | 30.22 per sample per section | 0.90 | mispredicts: 1,032 cycles |
+| `biquad_mac` | The same with `mac`, `msu` and `acc.rdh` | 7,788 | 15.21 per sample per section | 0.99 | — |
+| `mix` | Saturating Q31 add, 256 samples, plain C (`__builtin_add_overflow`) | 5,624 | 21.97 per sample | 0.54 | D-cache waits: 2,054 cycles |
 | `mix_sadd` | The same with `sadd` | 4,133 | 16.14 per sample | 0.50 | D-cache waits: 2,054 cycles |
-| `fft_bitrev` | 64-point FFT input permutation, plain C (Gold–Rader reverse counter) | 1,216 | 19.00 per point | 0.77 | mispredicts: 214 cycles |
+| `fft_bitrev` | 64-point FFT input permutation, plain C (Gold–Rader reverse counter) | 1,203 | 18.80 per point | 0.78 | mispredicts: 214 cycles |
 | `fft_bitrev_agu` | The same, loading through an address register in bit-reversed mode | 423 | 6.61 per point | 0.80 | load-use bubbles: 64 cycles |
 | `fft_stages` | 64-point complex Q15 FFT, 6 stages of radix-2 butterflies, plain C | 10,510 | 54.74 per butterfly | 0.89 | D-cache waits: 466 cycles |
 | `fft_stages_dmac` | The same, each half of the twiddle product one `dmac` against a packed twiddle | 8,295 | 43.20 per butterfly | 0.87 | load-use bubbles: 384 cycles |
 | `fft_stages_packed` | The same, then `pk16` packs t and `radd16`/`rsub16` give both outputs, on both halves at once | 5,414 | 28.20 per butterfly | 0.84 | load-use bubbles: 385 cycles |
-| `sha256` | SHA-256 of 256 bytes, plain RV32IMC | 26,327 | 102.8 per byte | 0.98 | D-cache waits: 439 cycles |
-| `sha256_zk` | The same source built with Zbkb and Zknh (σ/Σ one instruction each) | 14,627 | 57.1 per byte | 0.95 | D-cache waits: 605 cycles |
-| `aes128` | AES-128 encryption of 256 bytes, byte-oriented C | 103,098 | 402.7 per byte | 0.91 | mispredicts: 4,590 cycles |
-| `aes128_ttable` | The same with one 1 KB T-table (the usual fast software form) | 21,500 | 84.0 per byte | 0.91 | D-cache waits: 1,690 cycles |
+| `sha256` | SHA-256 of 256 bytes, plain RV32IMC | 26,342 | 102.9 per byte | 0.98 | D-cache waits: 450 cycles |
+| `sha256_zk` | The same source built with Zbkb and Zknh (σ/Σ one instruction each) | 14,346 | 56.0 per byte | 0.97 | D-cache waits: 328 cycles |
+| `aes128` | AES-128 encryption of 256 bytes, byte-oriented C | 102,827 | 401.7 per byte | 0.91 | mispredicts: 4,592 cycles |
+| `aes128_ttable` | The same with one 1 KB T-table (the usual fast software form) | 21,110 | 82.5 per byte | 0.93 | D-cache waits: 1,300 cycles |
 | `aes128_zk` | The same with Zkne: 16 `aes32esmi` per round | 5,031 | 19.6 per byte | 0.97 | — |
 | `crc32_table` | zlib's CRC-32 of 256 bytes, table-driven C (1 KB table) | 2,834 | 11.1 per byte | 0.91 | load-use bubbles: 256 cycles |
 | `crc32_clmul` | The same a word at a time: Barrett reduction by `clmul`/`clmulh` (Zbkc) | 681 | 2.7 per byte | 0.97 | I-cache misses: 13 cycles |
-| `crc32_bitwise` | The same CRC-32 with no table: eight shift-and-XOR steps per byte | 16,160 | 63.1 per byte | 0.97 | mispredicts: 518 cycles |
+| `crc32_bitwise` | The same CRC-32 with no table: eight shift-and-XOR steps per byte | 16,173 | 63.2 per byte | 0.97 | mispredicts: 518 cycles |
 | `crc32c_table` / `crc32c_clmul` | CRC-32C (Castagnoli), table-driven C, then the same Zbkc loop with two other constants | 2,850 / 681 | 11.1 / 2.7 per byte | 0.90 / 0.97 | load-use bubbles: 256 cycles / — |
-| `crc16_table` / `crc16_clmul` | CRC-16/XMODEM (512-byte table), then one Zbkc routine for any CRC up to 32 bits, MSB first | 2,864 / 630 | 11.2 / 2.5 per byte | 0.99 / 0.95 | — |
-| `crc8_table` / `crc8_clmul` | CRC-8/SMBUS (256-byte table), then the same Zbkc routine | 1,569 / 631 | 6.1 / 2.5 per byte | 0.99 / 0.94 | — |
+| `crc16_table` / `crc16_clmul` | CRC-16/XMODEM (512-byte table), then one Zbkc routine for any CRC up to 32 bits, MSB first | 2,851 / 630 | 11.1 / 2.5 per byte | 0.99 / 0.95 | — |
+| `crc8_table` / `crc8_clmul` | CRC-8/SMBUS (256-byte table), then the same Zbkc routine | 1,582 / 644 | 6.2 / 2.5 per byte | 0.98 / 0.93 | — |
 | `lfsr_bitwise` | 32-bit Galois LFSR random numbers, 64 words, each 32 steps on, a step at a time | 12,718 | 198.7 per word | 0.99 | mispredicts: 134 cycles |
-| `lfsr_table` | The same a byte (8 steps) at a time, one 1 KB table | 2,669 | 41.7 per word | 0.87 | straddle fetches: 192 cycles |
-| `lfsr_clmul` | The same 32 steps at a time: the CRC's reduction with no data (Zbkc) | 432 | 6.75 per word | 0.92 | I-cache misses: 26 cycles |
+| `lfsr_table` | The same a byte (8 steps) at a time, one 1 KB table | 2,695 | 42.1 per word | 0.86 | straddle fetches: 192 cycles |
+| `lfsr_clmul` | The same 32 steps at a time: the CRC's reduction with no data (Zbkc) | 419 | 6.55 per word | 0.95 | I-cache misses: 13 cycles |
 | `xorshift32` | Marsaglia's xorshift32, for comparison | 620 | 9.69 per word | 0.95 | — |
 | `lfsr_jump` / `lfsr_jump_clmul` | The LFSR state 1,000,000 steps on: x^N mod P by square and multiply, plain C then Zbkc | 9,861 / 289 | the same, per jump | 0.99 / 0.88 | — |
-| `rs_syndromes` | Reed–Solomon RS(255,223): the 32 syndromes of a received word, Horner's rule with exp/log tables | 90,783 | 356 per byte | 0.90 | load-use bubbles: 8,097 cycles |
-| `rs_syndromes_gf` | The same four syndromes per word: `gfmul4` by (α^j..α^(j+3)), then the byte added to every lane | 6,259 | 24.5 per byte | 0.95 | load-use bubbles: 255 cycles |
-| `rs_chien` | Chien search for the 16 roots of the error locator, terms stepped in the log domain | 50,941 | 200 per point | 0.89 | load-use bubbles: 4,080 cycles |
-| `rs_chien_gf` | The same, the 16 terms in four words, one `gfmul4` per word per point | 4,514 | 17.7 per point | 0.98 | mispredicts: 42 cycles |
+| `rs_syndromes` | Reed–Solomon RS(255,223): the 32 syndromes of a received word, Horner's rule with exp/log tables | 90,848 | 356 per byte | 0.90 | load-use bubbles: 8,097 cycles |
+| `rs_syndromes_gf` | The same four syndromes per word: `gfmul4` by (α^j..α^(j+3)), then the byte added to every lane | 6,246 | 24.5 per byte | 0.95 | load-use bubbles: 255 cycles |
+| `rs_chien` | Chien search for the 16 roots of the error locator, terms stepped in the log domain | 50,954 | 200 per point | 0.89 | load-use bubbles: 4,080 cycles |
+| `rs_chien_gf` | The same, the 16 terms in four words, one `gfmul4` per word per point | 4,501 | 17.6 per point | 0.99 | mispredicts: 42 cycles |
 | `aes_invmix` | AES InvMixColumns of 256 bytes, the fast constant-time C (four bytes per xtime) | 3,247 | 12.7 per byte | 0.99 | I-cache misses: 26 cycles |
-| `aes_invmix_gf` | The same as FIPS-197's matrix: four `gfmul4` per column, by 14, 11, 13 and 9 | 1,130 | 4.4 per byte | 0.93 | load-use bubbles: 64 cycles |
-| `mlkem_ntt` | ML-KEM's forward NTT (7 layers, 896 butterflies mod 3329), pq-crystals' reference C | 24,146 | 27.0 per butterfly | 0.84 | mul-use bubbles: 2,304 cycles |
-| `mlkem_ntt_ct` | The same, two coefficients per word, `ctadd2`/`ctsub2`: two instructions per two butterflies | 6,913 | 7.7 per butterfly | 0.67 | D-cache waits: 2,035 cycles |
-| `mlkem_ntt_ct2` | The same, two layers per pass, each step scheduled by hand | 3,897 | 4.3 per butterfly | 0.69 | D-cache waits: 1,095 cycles |
-| `mlkem_invntt` / `mlkem_invntt_x2` | The inverse NTT: the reference C, then `gsmul2`/`mqadd2` two layers per pass | 34,375 / 4,095 | 38.4 / 4.6 per butterfly | 0.80 / 0.65 | mul-use bubbles: 5,248 cycles / D-cache waits: 1,373 cycles |
-| `mlkem_basemul` / `mlkem_basemul_x` | The 128 products of degree-one polynomials: the reference, then `mqmul2`, `ctadd2`, `mqadd2` | 11,498 / 3,356 | 89.8 / 26.2 per pair | 0.70 / 0.60 | mul-use bubbles: 1,792 cycles / D-cache waits: 1,052 cycles |
-| `mlkem_polymul` / `mlkem_polymul_x` | A whole product a·b in ML-KEM's ring: two NTTs, basemul, the inverse NTT | 94,010 / 15,302 | the same, per product | 0.81 / 0.66 | mul-use bubbles: 11,648 cycles / D-cache waits: 4,510 cycles |
+| `aes_invmix_gf` | The same as FIPS-197's matrix: four `gfmul4` per column, by 14, 11, 13 and 9 | 1,143 | 4.5 per byte | 0.92 | load-use bubbles: 64 cycles |
+| `mlkem_ntt` | ML-KEM's forward NTT (7 layers, 896 butterflies mod 3329), pq-crystals' reference C | 23,965 | 26.8 per butterfly | 0.84 | mul-use bubbles: 2,304 cycles |
+| `mlkem_ntt_ct` | The same, two coefficients per word, `ctadd2`/`ctsub2`: two instructions per two butterflies | 7,055 | 7.9 per butterfly | 0.66 | D-cache waits: 2,165 cycles |
+| `mlkem_ntt_ct2` | The same, two layers per pass, each step scheduled by hand | 4,041 | 4.5 per butterfly | 0.66 | D-cache waits: 1,238 cycles |
+| `mlkem_invntt` / `mlkem_invntt_x2` | The inverse NTT: the reference C, then `gsmul2`/`mqadd2` two layers per pass | 34,335 / 4,159 | 38.3 / 4.6 per butterfly | 0.80 / 0.64 | mul-use bubbles: 5,248 cycles / D-cache waits: 1,438 cycles |
+| `mlkem_basemul` / `mlkem_basemul_x` | The 128 products of degree-one polynomials: the reference, then `mqmul2`, `ctadd2`, `mqadd2` | 11,808 / 3,602 | 92.2 / 28.1 per pair | 0.69 / 0.56 | mul-use bubbles: 1,792 cycles / D-cache waits: 1,299 cycles |
+| `mlkem_polymul` / `mlkem_polymul_x` | A whole product a·b in ML-KEM's ring: two NTTs, basemul, the inverse NTT | 93,757 / 15,427 | the same, per product | 0.81 / 0.65 | mul-use bubbles: 11,648 cycles / D-cache waits: 4,609 cycles |
 
 The extension removes the 64-bit carry chain from the energy kernel (3.5× with `dmac`) and the multiply, add
 and saturation code from the FIR. With `mac` alone the FIR gains 15%, because GCC puts each load directly
 before the `mac` that uses it, costing a load-use bubble per tap. The address generators (step 2) remove the
-pointer increments; written two taps per iteration, with the loads ahead of the MACs, the FIR runs at 4.92
+pointer increments; written two taps per iteration, with the loads ahead of the MACs, the FIR runs at 4.94
 cycles per tap and the energy at 1.66 per sample (6.7× the plain C). With two taps per `dmac` the FIR reaches
-3.75 per tap (2.4×); odd outputs, whose sample pairs are not aligned, start a sample early against a copy of
+3.77 per tap (2.4×); odd outputs, whose sample pairs are not aligned, start a sample early against a copy of
 the coefficients shifted by one ([doc/dsp_extension.md](doc/dsp_extension.md), step 3). The hardware loop
-(step 4) folds the loop-back into the body's last `dmac`, predicted like a branch: the FIR reaches 3.19 cycles
+(step 4) folds the loop-back into the body's last `dmac`, predicted like a branch: the FIR reaches 3.20 cycles
 per tap (2.9×) and the energy 1.15 per sample (9.7×). The biquad halves with `mac`/`msu`/`acc.rdh` (step 5a);
 the saturating mix gains less because it is memory-bound (its three arrays conflict in the D-cache). The FFT
 (step 5b) gains about 2×: bit-reversed addressing cuts its permutation by about 2.9×, `dmac` against packed twiddles
 computes each half of the twiddle product in one instruction, and packed halving adds and subtracts (step 5c)
 make each butterfly output one instruction. SHA-256 with the ratified Zbkb and Zknh runs 1.8× faster, and
-AES-128 with Zkne 4.3× faster than T-table C, and CRC-32 by carry-less multiply (Zbkc) 4.2× faster than
+AES-128 with Zkne 4.2× faster than T-table C, and CRC-32 by carry-less multiply (Zbkc) 4.2× faster than
 table-driven C ([doc/crypto_extensions.md](doc/crypto_extensions.md)). Carry-less multiply is general
 polynomial arithmetic over GF(2) ([doc/finite_fields.md](doc/finite_fields.md)): one three-instruction loop
 computes every CRC up to 32 bits, only its two constants changing (CRC-32C, CRC-16 and CRC-8 at 2.5 to 2.7 cycles
 per byte against 6.1 to 11.2 for their tables), steps an LFSR 32 bits at a time (29× a step at a time, and
 faster than xorshift32), and jumps it a million steps ahead in 289 cycles (34× the plain C). Xbrvdsp's packed GF(2⁸) multiply,
 `gfmul4` (four byte lanes, the field's polynomial programmable), takes the Reed–Solomon syndromes 14.5× and the
-Chien search 11.3× faster than exp/log tables, and AES InvMixColumns 2.9× faster than packed C. Xbrvdsp's
+Chien search 11.3× faster than exp/log tables, and AES InvMixColumns 2.8× faster than packed C. Xbrvdsp's
 packed arithmetic mod q ([doc/lattice_crypto.md](doc/lattice_crypto.md)), two 16-bit lanes with Montgomery
-multiplication and Cooley–Tukey and Gentleman–Sande butterfly instructions, takes ML-KEM's NTT 6.2×, its
-inverse 8.4× and a whole product of two polynomials 6.1× faster than pq-crystals' reference C; once the
+multiplication and Cooley–Tukey and Gentleman–Sande butterfly instructions, takes ML-KEM's NTT 5.9×, its
+inverse 8.3× and a whole product of two polynomials 6.1× faster than pq-crystals' reference C; once the
 arithmetic is one instruction per butterfly pair, the write-through D-cache's stores set the pace, and merging
 two NTT layers per pass halves them. The ML-KEM model the expected values come from passes NIST's ACVP vectors
 and C2SP CCTV's accumulated test vectors. The benchmark
 also checks Zkt's promise of data-independent timing, running each kernel on two inputs through the same code:
 the Zkne AES takes 5,018 cycles on both keys and plaintexts and the `gfmul4` syndromes 6,221 on both received
-words, while the T-table AES (20,836 and 20,979) and the log-table syndromes (89,847 and 88,489, whose zero
+words, while the T-table AES (21,018 and 20,940) and the log-table syndromes (89,847 and 88,489, whose zero
 test branches on the data) do not. Memory-bound kernels move by a few percent when the data layout
 changes (an added array shifts the D-cache conflicts); the table is from the latest build. The benchmarks are compiled with
 `-falign-loops=4`, so that no loop starts with a 32-bit instruction at 2 mod 4, which costs a fetch bubble

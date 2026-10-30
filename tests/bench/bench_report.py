@@ -24,7 +24,8 @@ KERNELS = [(0, "fir, cold caches", 64 * 16, "tap"), (2, "fir", 64 * 16, "tap"),
            (20, "fir_agu, cold", 64 * 16, "tap"), (22, "fir_agu", 64 * 16, "tap"),
            (24, "fir_agu2, cold", 64 * 16, "tap"), (26, "fir_agu2", 64 * 16, "tap"),
            (28, "energy_agu, cold", 256, "sample"), (30, "energy_agu", 256, "sample"),
-           (32, "energy_agu2, cold", 256, "sample"), (34, "energy_agu2", 256, "sample")]
+           (32, "energy_agu2, cold", 256, "sample"), (34, "energy_agu2", 256, "sample"),
+           (36, "fir_dmac, cold", 64 * 16, "tap"), (38, "fir_dmac", 64 * 16, "tap")]
 
 
 def marker(raw):

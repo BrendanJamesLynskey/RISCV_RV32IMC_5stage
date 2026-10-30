@@ -237,18 +237,21 @@ back to the event that made it).
 | `fir` | 16-tap Q15 FIR, 64 outputs, 32-bit accumulator, rounded and saturated | 9,397 | 9.18 per tap | 0.87 | mul-use bubbles, one per tap: 1,024 cycles |
 | `energy` | Sum of squares of 256 Q15 samples, 64-bit accumulator | 2,848 | 11.12 per sample | 0.90 | mul-use bubbles: 256 cycles |
 | `fir_mac` | The FIR with Xbrvdsp: `mac` per tap, `acc.rdh` to round and saturate | 7,986 | 7.80 per tap | 0.85 | load-use bubbles, one per tap: 1,024 cycles |
-| `energy_mac` | The energy with `mac`, read back exactly from the 40-bit accumulator | 1,328 | 5.19 per sample | 0.78 | load-use bubbles: 256 cycles |
-| `energy_dmac` | The energy with `dmac`: two samples per instruction from one 32-bit load | 819 | 3.20 per sample | 0.80 | load-use bubbles: 128 cycles |
-| `fir_agu` | `fir_mac` with both pointers in address registers: `lh.a`, `lh.a`, `mac` per tap | 7,105 | 6.94 per tap | 0.82 | load-use bubbles, one per tap: 1,024 cycles |
+| `energy_mac` | The energy with `mac`, read back exactly from the 40-bit accumulator | 1,315 | 5.14 per sample | 0.79 | load-use bubbles: 256 cycles |
+| `energy_dmac` | The energy with `dmac`: two samples per instruction from one 32-bit load | 806 | 3.15 per sample | 0.81 | load-use bubbles: 128 cycles |
+| `fir_agu` | `fir_mac` with both pointers in address registers: `lh.a`, `lh.a`, `mac` per tap | 7,092 | 6.93 per tap | 0.82 | load-use bubbles, one per tap: 1,024 cycles |
 | `fir_agu2` | The same, two taps per iteration, all four loads ahead of the MACs | 5,044 | 4.93 per tap | 0.96 | inner-loop exit mispredicts: 134 cycles |
 | `energy_agu` | `energy_dmac` with `lw.a` | 681 | 2.66 per sample | 0.78 | load-use bubbles: 128 cycles |
-| `energy_agu2` | The same, four samples per iteration | 425 | 1.66 per sample | 0.95 | I-cache misses: 13 cycles |
+| `energy_agu2` | The same, four samples per iteration | 426 | 1.66 per sample | 0.95 | I-cache misses: 13 cycles |
+| `fir_dmac` | The FIR two taps per `dmac`, all loads aligned words (odd outputs use a shifted copy of the taps) | 3,844 | 3.75 per tap | 0.92 | inner-loop exit mispredicts: 200 cycles |
 
 The extension removes the 64-bit carry chain from the energy kernel (3.5× with `dmac`) and the multiply, add
 and saturation code from the FIR. With `mac` alone the FIR gains 15%, because GCC puts each load directly
 before the `mac` that uses it, costing a load-use bubble per tap. The address generators (step 2) remove the
 pointer increments; written two taps per iteration, with the loads ahead of the MACs, the FIR runs at 4.93
-cycles per tap (1.9× the plain C) and the energy at 1.66 per sample (6.7×). The benchmarks are compiled with
+cycles per tap and the energy at 1.66 per sample (6.7× the plain C). With two taps per `dmac` the FIR reaches
+3.75 per tap (2.4×); odd outputs, whose sample pairs are not aligned, start a sample early against a copy of
+the coefficients shifted by one ([doc/dsp_extension.md](doc/dsp_extension.md), step 3). The benchmarks are compiled with
 `-falign-loops=4`, so that no loop starts with a 32-bit instruction at 2 mod 4, which costs a fetch bubble
 on every jump back.
 

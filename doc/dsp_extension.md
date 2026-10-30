@@ -10,7 +10,7 @@ project's own.
 |---|---|---|
 | 1 | Multiply-accumulate: `mac`, `dmac`, `msu`, accumulator access | **done** |
 | 2 | Address generators: loads that step a pointer register (bit-reversed addressing comes with the FFT, step 5) | **done** |
-| 3 | Packed loads for `dmac` in the FIR | planned |
+| 3 | Two taps per `dmac` in the FIR, from aligned word loads (software only: no new hardware was needed) | **done** |
 | 4 | Zero-overhead hardware loop | planned |
 | 5 | Saturating add and subtract; bit-reversed addressing; biquad IIR and radix-2 FFT benchmarks | planned |
 
@@ -152,9 +152,9 @@ same alignment check, the same D-cache access, the same load-use interlock.
 |---|---|---|
 | FIR, plain C | 9.18 per tap | 2 loads, 2 pointer increments, `mul`, `add`, `bne` (and a mul-use bubble) |
 | FIR, `mac` (step 1) | 7.80 per tap | 2 loads, 2 increments, `mac`, `bne`, and a load-use bubble |
-| FIR, `lh.a` + `mac` | 6.94 per tap | `lh.a`, `lh.a`, `mac`, count, `bne`, and a load-use bubble |
+| FIR, `lh.a` + `mac` | 6.93 per tap | `lh.a`, `lh.a`, `mac`, count, `bne`, and a load-use bubble |
 | FIR, `lh.a` + `mac`, two taps per iteration | **4.93 per tap** | four `lh.a`, two `mac`, count, `bne`: no bubble |
-| Energy, `dmac` (step 1) | 3.20 per sample | |
+| Energy, `dmac` (step 1) | 3.15 per sample | |
 | Energy, `lw.a` + `dmac` | 2.66 per sample | |
 | Energy, `lw.a` + `dmac`, four samples per iteration | **1.66 per sample** | |
 
@@ -163,3 +163,29 @@ starts at 2 mod 4 costs a fetch bubble on every jump back (early straddle only h
 AGU kernels that was a bubble per iteration (961 cycles in the FIR). The flag affects the other kernels by under
 1%. What the FIR still loses is the inner loop's exit mispredict (two cycles per output) and its count and
 branch: the hardware loop of step 4.
+
+## Step 3: two taps per `dmac` in the FIR
+
+The plan was packed loads: one `lw.a` gives two Q15 samples, and `dmac` multiplies both pairs at once. The
+energy kernel already did this; the FIR has a problem. Output y[n] needs the pairs (x[n+k], x[n+k+1]), which are
+aligned words only for even n. Unaligned pair loads would need a second memory access, or a funnel register
+that joins halves of two words.
+
+Software alone avoids both. For odd n, start one sample early, at the aligned x[n−1], and use a copy of the
+coefficients shifted by one place: hs = (0, h[0], h[1], …, h[15], 0, …). Then
+
+  x[n−1]·hs[0] + x[n]·hs[1] + x[n+1]·hs[2] + … = 0 + x[n]·h[0] + x[n+1]·h[1] + …
+
+which is y[n]. Every load is an aligned word, from both arrays. Odd outputs do one more pair (the shifted copy
+is 17 taps, padded to 20). The copy is built once per call, inside the measured kernel. The input array is padded
+with zeros, so the extra loads at the end read zeros.
+
+| Kernel (warm caches) | Cycles per tap |
+|---|---|
+| FIR, `lh.a` + `mac`, two taps per iteration (step 2) | 4.93 |
+| FIR, `lw.a` + `dmac`, four taps per iteration (`fir_q15_dmac`) | **3.75** |
+
+The inner loop is four `lw.a`, two `dmac`, the count and the branch: 8 instructions for 4 taps (5 for odd
+outputs). About a third of the cycles are now the per-output overhead: setting up the address registers,
+reading the result, and the inner loop's exit mispredict. The hardware loop of step 4 removes the count, the
+branch and the mispredict.

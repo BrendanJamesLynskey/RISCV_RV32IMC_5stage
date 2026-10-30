@@ -501,8 +501,33 @@ void aes128_enc_t(uint32_t *out, const uint32_t *in, const uint32_t *rk, int blo
 /* CRC-32 (crc32.c, table-driven; crc32_zk.c, Zbkc and Zbkb) */
 uint32_t crc32_table(const uint8_t *p, int len);
 uint32_t crc32_clmul(const uint32_t *p, int len);
+/* Polynomials over GF(2) (gf2.c, plain; gf2_zk.c, Zbkc and Zbkb) */
+uint32_t crc32_bitwise(const uint8_t *p, int len);
+uint32_t crc32c_table(const uint8_t *p, int len);
+uint32_t crc16_table(const uint8_t *p, int len);
+uint32_t crc8_table(const uint8_t *p, int len);
+uint32_t crc32c_clmul(const uint32_t *p, int len);
+uint32_t crc_clmul_msb(const uint32_t *p, int len, uint32_t P, uint32_t mu, int n);
+void lfsr_bitwise(uint32_t *out, uint32_t s, int n);
+void lfsr_table(uint32_t *out, uint32_t s, int n);
+void lfsr_clmul(uint32_t *out, uint32_t s, int n);
+void xorshift32(uint32_t *out, uint32_t s, int n);
+uint32_t lfsr_jump(uint32_t s, uint32_t e);
+uint32_t lfsr_jump_clmul(uint32_t s, uint32_t e);
 
 static int16_t fir_y[FIR_OUTS];
+
+/* Clears the words before checking them, so a kernel that writes nothing
+   cannot pass on the previous run's output */
+static int words_eq(uint32_t *a, const uint32_t *b, int n)
+{
+  int ok = 1;
+  for (int i = 0; i < n; i++) {
+    ok &= a[i] == b[i];
+    a[i] = 0;
+  }
+  return ok;
+}
 
 static int fir_ok(void)
 {
@@ -721,6 +746,35 @@ int main(void)
     if (k == 3) BENCH_MARK(79);
     if (c != crc_expect) return 40 + k;
   }
+
+  /* GF(2): each kernel run cold, then warm between markers m and m + 1 */
+#define WARM(m, run, ok, fail)                  \
+  for (int k = 0; k < 2; k++) {                 \
+    if (k) BENCH_MARK(m);                       \
+    run;                                        \
+    if (k) BENCH_MARK((m) + 1);                 \
+    if (!(ok)) return fail;                     \
+  }
+  /* Seven CRCs of the same 256 bytes (markers 88-101) */
+  const uint32_t *cw = (const uint32_t *)crc_msg;
+  uint32_t c;
+  WARM(88,  c = crc32_bitwise(crc_msg, CRC_LEN), c == crc_expect, 60);
+  WARM(90,  c = crc32c_table(crc_msg, CRC_LEN), c == crc32c_expect, 61);
+  WARM(92,  c = crc32c_clmul(cw, CRC_LEN), c == crc32c_expect, 62);
+  WARM(94,  c = crc16_table(crc_msg, CRC_LEN), c == crc16_expect, 63);
+  WARM(96,  c = crc_clmul_msb(cw, CRC_LEN, CRC16_P, CRC16_MU, 16), c == crc16_expect, 64);
+  WARM(98,  c = crc8_table(crc_msg, CRC_LEN), c == crc8_expect, 65);
+  WARM(100, c = crc_clmul_msb(cw, CRC_LEN, CRC8_P, CRC8_MU, 8), c == crc8_expect, 66);
+
+  /* LFSR: 64 words a bit at a time, a byte at a time, by clmul; xorshift32
+     (markers 102-109); the jump ahead, plain and by clmul (110-113) */
+  static uint32_t rnd[LFSR_WORDS];
+  WARM(102, lfsr_bitwise(rnd, LFSR_SEED, LFSR_WORDS), words_eq(rnd, lfsr_expect, LFSR_WORDS), 70);
+  WARM(104, lfsr_table(rnd, LFSR_SEED, LFSR_WORDS), words_eq(rnd, lfsr_expect, LFSR_WORDS), 71);
+  WARM(106, lfsr_clmul(rnd, LFSR_SEED, LFSR_WORDS), words_eq(rnd, lfsr_expect, LFSR_WORDS), 72);
+  WARM(108, xorshift32(rnd, LFSR_SEED, LFSR_WORDS), words_eq(rnd, xs_expect, LFSR_WORDS), 73);
+  WARM(110, c = lfsr_jump(LFSR_SEED, LFSR_JUMP), c == lfsr_jump_expect, 74);
+  WARM(112, c = lfsr_jump_clmul(LFSR_SEED, LFSR_JUMP), c == lfsr_jump_expect, 75);
 
   return 0;
 }

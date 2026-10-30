@@ -171,6 +171,9 @@ plaintexts through the very same call, so that only the data differs:
 | one-table T-table C | 21,079 cycles | 24,044 cycles (D-cache waits 1,287 against 4,264) |
 | Zkne | **5,013** | **5,013** |
 
+Later builds move the data, and with it the T-table times; after the finite-field kernels were added
+([finite_fields.md](finite_fields.md)) they were 22,666 and 20,989 cycles, and the Zkne times 5,014 and 5,014.
+
 The T-table version's loads go to addresses chosen by the key and the data. So its D-cache conflicts, and
 its time, depend on them. That is the cache-timing channel AES instructions exist to close. The Zkne version
 loads only the input, the round keys and the output, at fixed addresses, and runs in exactly the same number of

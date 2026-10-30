@@ -30,6 +30,15 @@ crc32:  zlib's CRC-32 of 256 bytes; the table for the table-driven C, and a
         result.
 aes:    AES-128 encryption (ECB) of 256 bytes. The model below is checked
         against the FIPS-197 example (key 000102..0f) before use.
+gf2:    polynomials over GF(2) (gf2.c, gf2_zk.c). Three more CRCs of the
+        same 256 bytes (CRC-32C, CRC-16/XMODEM, CRC-8/SMBUS): their tables,
+        and the two constants (P and mu) of the one carry-less loop that
+        computes them all, checked against a bitwise model, itself checked
+        against each CRC's published check value. A 32-bit Galois LFSR,
+        P = x^32 + x^22 + x^2 + x + 1 (checked primitive here): 64 states,
+        32 steps apart; its byte table; the state 1,000,000 steps on (the
+        jump-ahead kernels), checked by stepping. And xorshift32, for
+        comparison.
 """
 import hashlib
 import zlib
@@ -158,16 +167,87 @@ def aes128(key, data):
     return rk, out
 
 
+def clmul(a, b):
+    """Carry-less (GF(2) polynomial) product, full width."""
+    r = 0
+    while b:
+        if b & 1:
+            r ^= a
+        a, b = a << 1, b >> 1
+    return r
+
+
+def pdivmod(a, p):
+    """Quotient and remainder of GF(2) polynomials (p with its top bit)."""
+    q, dp = 0, p.bit_length()
+    while a.bit_length() >= dp:
+        sh = a.bit_length() - dp
+        q, a = q | 1 << sh, a ^ p << sh
+    return q, a
+
+
+def rev(v, n=32):
+    return int(format(v, f"0{n}b")[::-1], 2)
+
+
+def crc_bitwise(data, n, poly, init, refl, xorout):
+    """A CRC by its definition, a bit at a time (refl: reflected in and out)."""
+    top, mask, c = 1 << (n - 1), (1 << n) - 1, init
+    for b in data:
+        c ^= (rev(b, 8) if refl else b) << (n - 8)
+        for _ in range(8):
+            c = ((c << 1) ^ poly) & mask if c & top else (c << 1) & mask
+    return (rev(c, n) if refl else c) ^ xorout
+
+
+def crc_clmul_k(n, poly):
+    """gf2_zk.c's two constants for a CRC of degree n: P' = P x^(32-n), so the
+    CRC sits left-aligned in a word, and mu = floor(x^64 / P'), both less
+    their x^32 term."""
+    p = 1 << 32 | poly << (32 - n)
+    return p & 0xFFFFFFFF, pdivmod(1 << 64, p)[0] & 0xFFFFFFFF
+
+
+def crc_clmul(data, n, poly, init, refl, xorout):
+    """A CRC as gf2_zk.c computes it, a word at a time: x = c ^ w;
+    q = clmulh(x, mu) ^ x; c = clmul(q, P'). Reflected CRCs (here only
+    32-bit ones) bit-reverse each little-endian word; the others take it
+    big-endian."""
+    p, mu = crc_clmul_k(n, poly)
+    c = init << (32 - n)
+    for i in range(0, len(data), 4):
+        w = int.from_bytes(data[i:i + 4], "little")
+        x = c ^ (rev(w) if refl else int.from_bytes(data[i:i + 4], "big"))
+        q = (clmul(x, mu) >> 32) ^ x
+        c = clmul(q, p) & 0xFFFFFFFF
+    c >>= 32 - n
+    return (rev(c, n) if refl else c) ^ xorout
+
+
+LFSR_P = 1 << 32 | 0x00400007        # x^32 + x^22 + x^2 + x + 1
+
+
+def lfsr_mulmod(a, b):
+    return pdivmod(clmul(a, b), LFSR_P)[1]
+
+
+def lfsr_xpow(e):
+    r, m = 1, 2
+    while e:
+        if e & 1:
+            r = lfsr_mulmod(r, m)
+        m, e = lfsr_mulmod(m, m), e >> 1
+    return r
+
+
+def lfsr_step(s):
+    """One step of the Galois LFSR: s x mod P."""
+    return ((s << 1) ^ LFSR_P if s >> 31 else s << 1) & 0xFFFFFFFF
+
+
 def crc_barrett(data):
     """CRC-32 as crc32_zk.c computes it: a word at a time, bit-reversed into
     the normal domain, Barrett reduction by carry-less multiplies."""
-    def clmul(a, b):
-        r = 0
-        for i in range(32):
-            if (b >> i) & 1:
-                r ^= a << i
-        return r
-    rev = lambda v: int(format(v, "032b")[::-1], 2)
     p, mu = 0x04C11DB7, 0x04D101DF
     crc = 0xFFFFFFFF
     for i in range(0, len(data), 4):
@@ -285,6 +365,58 @@ def main():
     print(arr("crc32_tab", "uint32_t", tab))
     print(arr("crc_msg", "uint8_t __attribute__((aligned(4)))", list(cmsg)))
     print(f"static const uint32_t crc_expect = {zlib.crc32(cmsg):#010x}u;")
+
+    # gf2: three more CRCs of the same message, then the LFSR
+    crcs = [("crc32c", 32, 0x1EDC6F41, 0xFFFFFFFF, True, 0xFFFFFFFF, 0xE3069283),
+            ("crc16", 16, 0x1021, 0, False, 0, 0x31C3),
+            ("crc8", 8, 0x07, 0, False, 0, 0xF4)]
+    for name, n, poly, init, refl, xorout, check in crcs:
+        assert crc_bitwise(b"123456789", n, poly, init, refl, xorout) == check, f"{name} model fails its check value"
+        expect = crc_bitwise(cmsg, n, poly, init, refl, xorout)
+        assert crc_clmul(cmsg, n, poly, init, refl, xorout) == expect, f"{name}: the clmul formula disagrees"
+        tab = []
+        for i in range(256):
+            if refl:
+                c = i
+                for _ in range(8):
+                    c = (c >> 1) ^ (rev(poly) if c & 1 else 0)
+            else:
+                c = i << (n - 8)
+                for _ in range(8):
+                    c = ((c << 1) ^ poly) & ((1 << n) - 1) if c >> (n - 1) else c << 1
+            tab.append(c)
+        p, mu = crc_clmul_k(n, poly)
+        typ = {32: "uint32_t", 16: "uint16_t", 8: "uint8_t"}[n]
+        print(arr(f"{name}_tab", typ, tab))
+        print(f"#define {name.upper()}_P {p:#010x}u\n#define {name.upper()}_MU {mu:#010x}u")
+        print(f"static const uint32_t {name}_expect = {expect:#x}u;\n")
+
+    order = 2**32 - 1
+    assert lfsr_xpow(order) == 1 and all(lfsr_xpow(order // f) != 1 for f in (3, 5, 17, 257, 65537)), \
+        "the LFSR polynomial is not primitive"
+    lp, lmu = crc_clmul_k(32, LFSR_P & 0xFFFFFFFF)
+    seed, nwords, jump = 0x2545F491, 64, 1000000
+    st, s = [], seed
+    for _ in range(nwords):
+        for _ in range(32):
+            s = lfsr_step(s)
+        st.append(s)
+    s = seed
+    for _ in range(jump):
+        s = lfsr_step(s)
+    assert lfsr_mulmod(seed, lfsr_xpow(jump)) == s, "jump-ahead disagrees with stepping"
+    xs, v = [], seed
+    for _ in range(nwords):
+        v ^= (v << 13) & 0xFFFFFFFF
+        v ^= v >> 17
+        v ^= (v << 5) & 0xFFFFFFFF
+        xs.append(v)
+    print(f"#define LFSR_P {lp:#010x}u\n#define LFSR_MU {lmu:#010x}u\n#define LFSR_SEED {seed:#010x}u")
+    print(f"#define LFSR_WORDS {nwords}\n#define LFSR_JUMP {jump}\n")
+    print(arr("lfsr_tab", "uint32_t", [lfsr_mulmod(b, 1 << 32) for b in range(256)]))
+    print(arr("lfsr_expect", "uint32_t", st))
+    print(f"static const uint32_t lfsr_jump_expect = {s:#010x}u;\n")
+    print(arr("xs_expect", "uint32_t", xs))
 
 
 if __name__ == "__main__":

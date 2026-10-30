@@ -37,7 +37,14 @@ KERNELS = [(0, "fir, cold caches", 64 * 16, "tap"), (2, "fir", 64 * 16, "tap"),
            (70, "aes128", 256, "byte"), (74, "aes128_ttable", 256, "byte"), (72, "aes128_zk", 256, "byte"),
            (76, "crc32_table", 256, "byte"), (78, "crc32_clmul", 256, "byte"),
            (80, "zkt: ttable, key 1", 256, "byte"), (82, "zkt: ttable, key 2", 256, "byte"),
-           (84, "zkt: zk, key 1", 256, "byte"), (86, "zkt: zk, key 2", 256, "byte")]
+           (84, "zkt: zk, key 1", 256, "byte"), (86, "zkt: zk, key 2", 256, "byte"),
+           (88, "crc32_bitwise", 256, "byte"),
+           (90, "crc32c_table", 256, "byte"), (92, "crc32c_clmul", 256, "byte"),
+           (94, "crc16_table", 256, "byte"), (96, "crc16_clmul", 256, "byte"),
+           (98, "crc8_table", 256, "byte"), (100, "crc8_clmul", 256, "byte"),
+           (102, "lfsr_bitwise", 64, "word"), (104, "lfsr_table", 64, "word"),
+           (106, "lfsr_clmul", 64, "word"), (108, "xorshift32", 64, "word"),
+           (110, "lfsr_jump 10^6", 1, "jump"), (112, "lfsr_jump_clmul 10^6", 1, "jump")]
 
 
 def marker(raw):

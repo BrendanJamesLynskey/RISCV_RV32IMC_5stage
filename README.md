@@ -104,7 +104,7 @@ RISCV_RV32IMC_5stage/
 │   │   ├── elf2hex.py                # ELF image → $readmemh hex
 │   │   └── env/                      # Bare-metal test environment (riscv_test.h, link.ld)
 │   ├── directed/                     # Own tests: FENCE.I, misaligned traps, interrupts
-│   └── bench/                        # DSP and SHA-256 benchmarks (C), data generator, cycle report
+│   └── bench/                        # DSP, crypto and GF(2) benchmarks (C), data generator, cycle report
 ├── tools/spike_xbrvdsp/              # Spike model of the DSP extension, for lockstep
 ├── scripts/
 │   ├── lint.sh                       # Verilator -Wall lint
@@ -115,7 +115,8 @@ RISCV_RV32IMC_5stage/
 │   ├── BRV32P_Design_Report.md       # Detailed micro-architecture write-up
 │   ├── pipeline_trace.md             # The pipeline trace, its checking, and real diagrams
 │   ├── dsp_extension.md              # Xbrvdsp: encodings, semantics, micro-architecture
-│   └── crypto_extensions.md          # Zbkb/c/x, Zknh, Zkne, Zknd: implementation, tests, SHA-256, AES, CRC-32
+│   ├── crypto_extensions.md          # Zbkb/c/x, Zknh, Zkne, Zknd: implementation, tests, SHA-256, AES, CRC-32
+│   └── finite_fields.md              # Finite fields: CRCs and LFSRs by carry-less multiply
 └── README.md
 ```
 
@@ -249,22 +250,31 @@ back to the event that made it).
 | `fir_dmac` | The FIR two taps per `dmac`, all loads aligned words (odd outputs use a shifted copy of the taps) | 3,843 | 3.75 per tap | 0.92 | inner-loop exit mispredicts: 200 cycles |
 | `fir_lp` | `fir_dmac` with the inner loop in hardware: four `lw.a`, `dmac`, `dmac.lp` | 3,267 | 3.19 per tap | 0.91 | mispredicts (loop exit, even/odd test): 264 cycles |
 | `energy_lp` | `energy_agu2` as a hardware loop: two `lw.a`, `dmac`, `dmac.lp` | 295 | 1.15 per sample | 0.93 | I-cache misses: 13 cycles |
-| `biquad` | Two-section Q14 biquad IIR (direct form I), 256 samples, plain C | 15,485 | 30.24 per sample per section | 0.90 | mispredicts: 1,032 cycles |
-| `biquad_mac` | The same with `mac`, `msu` and `acc.rdh` | 7,801 | 15.24 per sample per section | 0.99 | — |
-| `mix` | Saturating Q31 add, 256 samples, plain C (`__builtin_add_overflow`) | 5,533 | 21.61 per sample | 0.55 | D-cache waits: 1,963 cycles |
-| `mix_sadd` | The same with `sadd` | 4,042 | 15.79 per sample | 0.51 | D-cache waits: 1,963 cycles |
-| `fft_bitrev` | 64-point FFT input permutation, plain C (Gold–Rader reverse counter) | 1,164 | 18.19 per point | 0.80 | mispredicts: 216 cycles |
-| `fft_bitrev_agu` | The same, loading through an address register in bit-reversed mode | 410 | 6.41 per point | 0.82 | load-use bubbles: 64 cycles |
-| `fft_stages` | 64-point complex Q15 FFT, 6 stages of radix-2 butterflies, plain C | 10,497 | 54.67 per butterfly | 0.89 | D-cache waits: 453 cycles |
-| `fft_stages_dmac` | The same, each half of the twiddle product one `dmac` against a packed twiddle | 8,152 | 42.46 per butterfly | 0.89 | load-use bubbles: 384 cycles |
-| `fft_stages_packed` | The same, then `pk16` packs t and `radd16`/`rsub16` give both outputs, on both halves at once | 5,258 | 27.39 per butterfly | 0.87 | load-use bubbles: 385 cycles |
-| `sha256` | SHA-256 of 256 bytes, plain RV32IMC | 26,363 | 103.0 per byte | 0.98 | D-cache waits: 476 cycles |
-| `sha256_zk` | The same source built with Zbkb and Zknh (σ/Σ one instruction each) | 14,346 | 56.0 per byte | 0.97 | D-cache waits: 328 cycles |
-| `aes128` | AES-128 encryption of 256 bytes, byte-oriented C | 102,864 | 401.8 per byte | 0.91 | mispredicts: 4,590 cycles |
-| `aes128_ttable` | The same with one 1 KB T-table (the usual fast software form) | 23,775 | 92.9 per byte | 0.82 | D-cache waits: 3,965 cycles |
+| `biquad` | Two-section Q14 biquad IIR (direct form I), 256 samples, plain C | 15,472 | 30.22 per sample per section | 0.90 | mispredicts: 1,032 cycles |
+| `biquad_mac` | The same with `mac`, `msu` and `acc.rdh` | 7,790 | 15.21 per sample per section | 0.99 | — |
+| `mix` | Saturating Q31 add, 256 samples, plain C (`__builtin_add_overflow`) | 5,455 | 21.31 per sample | 0.56 | D-cache waits: 1,885 cycles |
+| `mix_sadd` | The same with `sadd` | 3,964 | 15.48 per sample | 0.52 | D-cache waits: 1,885 cycles |
+| `fft_bitrev` | 64-point FFT input permutation, plain C (Gold–Rader reverse counter) | 1,190 | 18.59 per point | 0.78 | mispredicts: 214 cycles |
+| `fft_bitrev_agu` | The same, loading through an address register in bit-reversed mode | 449 | 7.02 per point | 0.75 | load-use bubbles: 64 cycles |
+| `fft_stages` | 64-point complex Q15 FFT, 6 stages of radix-2 butterflies, plain C | 10,536 | 54.88 per butterfly | 0.89 | D-cache waits: 492 cycles |
+| `fft_stages_dmac` | The same, each half of the twiddle product one `dmac` against a packed twiddle | 8,178 | 42.59 per butterfly | 0.89 | load-use bubbles: 384 cycles |
+| `fft_stages_packed` | The same, then `pk16` packs t and `radd16`/`rsub16` give both outputs, on both halves at once | 5,273 | 27.46 per butterfly | 0.86 | load-use bubbles: 385 cycles |
+| `sha256` | SHA-256 of 256 bytes, plain RV32IMC | 26,414 | 103.2 per byte | 0.98 | D-cache waits: 528 cycles |
+| `sha256_zk` | The same source built with Zbkb and Zknh (σ/Σ one instruction each) | 14,349 | 56.0 per byte | 0.97 | D-cache waits: 327 cycles |
+| `aes128` | AES-128 encryption of 256 bytes, byte-oriented C | 102,749 | 401.4 per byte | 0.91 | mispredicts: 4,592 cycles |
+| `aes128_ttable` | The same with one 1 KB T-table (the usual fast software form) | 22,579 | 88.2 per byte | 0.87 | D-cache waits: 2,769 cycles |
 | `aes128_zk` | The same with Zkne: 16 `aes32esmi` per round | 5,031 | 19.6 per byte | 0.97 | — |
 | `crc32_table` | zlib's CRC-32 of 256 bytes, table-driven C (1 KB table) | 2,834 | 11.1 per byte | 0.91 | load-use bubbles: 256 cycles |
 | `crc32_clmul` | The same a word at a time: Barrett reduction by `clmul`/`clmulh` (Zbkc) | 681 | 2.7 per byte | 0.97 | I-cache misses: 13 cycles |
+| `crc32_bitwise` | The same CRC-32 with no table: eight shift-and-XOR steps per byte | 16,159 | 63.1 per byte | 0.97 | mispredicts: 518 cycles |
+| `crc32c_table` / `crc32c_clmul` | CRC-32C (Castagnoli), table-driven C, then the same Zbkc loop with two other constants | 2,863 / 682 | 11.2 / 2.7 per byte | 0.90 / 0.97 | load-use bubbles: 256 cycles / — |
+| `crc16_table` / `crc16_clmul` | CRC-16/XMODEM (512-byte table), then one Zbkc routine for any CRC up to 32 bits, MSB first | 2,851 / 644 | 11.1 / 2.5 per byte | 0.99 / 0.93 | — |
+| `crc8_table` / `crc8_clmul` | CRC-8/SMBUS (256-byte table), then the same Zbkc routine | 1,569 / 630 | 6.1 / 2.5 per byte | 0.99 / 0.95 | — |
+| `lfsr_bitwise` | 32-bit Galois LFSR random numbers, 64 words, each 32 steps on, a step at a time | 12,718 | 198.7 per word | 0.99 | mispredicts: 134 cycles |
+| `lfsr_table` | The same a byte (8 steps) at a time, one 1 KB table | 2,656 | 41.5 per word | 0.87 | straddle fetches: 192 cycles |
+| `lfsr_clmul` | The same 32 steps at a time: the CRC's reduction with no data (Zbkc) | 432 | 6.75 per word | 0.92 | I-cache misses: 26 cycles |
+| `xorshift32` | Marsaglia's xorshift32, for comparison | 607 | 9.48 per word | 0.97 | — |
+| `lfsr_jump` / `lfsr_jump_clmul` | The LFSR state 1,000,000 steps on: x^N mod P by square and multiply, plain C then Zbkc | 9,861 / 289 | the same, per jump | 0.99 / 0.88 | — |
 
 The extension removes the 64-bit carry chain from the energy kernel (3.5× with `dmac`) and the multiply, add
 and saturation code from the FIR. With `mac` alone the FIR gains 15%, because GCC puts each load directly
@@ -276,13 +286,17 @@ the coefficients shifted by one ([doc/dsp_extension.md](doc/dsp_extension.md), s
 (step 4) folds the loop-back into the body's last `dmac`, predicted like a branch: the FIR reaches 3.19 cycles
 per tap (2.9×) and the energy 1.15 per sample (9.7×). The biquad halves with `mac`/`msu`/`acc.rdh` (step 5a);
 the saturating mix gains less because it is memory-bound (its three arrays conflict in the D-cache). The FFT
-(step 5b) gains about 2×: bit-reversed addressing cuts its permutation by about 2.8×, `dmac` against packed twiddles
+(step 5b) gains about 2×: bit-reversed addressing cuts its permutation by about 2.7×, `dmac` against packed twiddles
 computes each half of the twiddle product in one instruction, and packed halving adds and subtracts (step 5c)
 make each butterfly output one instruction. SHA-256 with the ratified Zbkb and Zknh runs 1.8× faster, and
-AES-128 with Zkne 4.7× faster than T-table C, and CRC-32 by carry-less multiply (Zbkc) 4.2× faster than
-table-driven C ([doc/crypto_extensions.md](doc/crypto_extensions.md)). The benchmark also checks Zkt's
-promise of data-independent timing: the Zkne AES takes 5,013 cycles for both of two keys and plaintexts, while the
-T-table version takes 21,079 and 24,044 as its table lookups conflict in the D-cache differently. Memory-bound kernels move by a few percent when the data layout
+AES-128 with Zkne 4.5× faster than T-table C, and CRC-32 by carry-less multiply (Zbkc) 4.2× faster than
+table-driven C ([doc/crypto_extensions.md](doc/crypto_extensions.md)). Carry-less multiply is general
+polynomial arithmetic over GF(2) ([doc/finite_fields.md](doc/finite_fields.md)): one three-instruction loop
+computes every CRC up to 32 bits, only its two constants changing (CRC-32C, CRC-16 and CRC-8 at 2.5 to 2.7 cycles
+per byte against 6.1 to 11.2 for their tables), steps an LFSR 32 bits at a time (29× a step at a time, and
+faster than xorshift32), and jumps it a million steps ahead in 289 cycles (34× the plain C). The benchmark also checks Zkt's
+promise of data-independent timing: the Zkne AES takes 5,014 cycles for both of two keys and plaintexts, while the
+T-table version takes 22,666 and 20,989 as its table lookups conflict in the D-cache differently. Memory-bound kernels move by a few percent when the data layout
 changes (an added array shifts the D-cache conflicts); the table is from the latest build. The benchmarks are compiled with
 `-falign-loops=4`, so that no loop starts with a 32-bit instruction at 2 mod 4, which costs a fetch bubble
 on every jump back.

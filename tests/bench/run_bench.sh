@@ -26,18 +26,18 @@ LOCKSTEP="${LOCKSTEP:-1}"
 
 python3 "$HERE/gen_data.py" > "$B/bench_data.h"
 CFLAGS=(-O2 -falign-loops=4 -mabi=ilp32 -mcmodel=medany -ffreestanding -I "$B" -I "$HERE")
-for f in sha256_zk aes_zk crc32_zk; do
+for f in sha256_zk aes_zk crc32_zk gf2_zk; do
   "${CROSS}gcc" "${CFLAGS[@]}" -march="$MARCH_ZK" -c "$HERE/$f.c" -o "$B/$f.o"
 done
 "${CROSS}gcc" "${CFLAGS[@]}" -march="$MARCH" -static -nostdlib -nostartfiles -T "$HERE/link.ld" \
-  "$HERE/crt.S" "$HERE/dsp.c" "$HERE/sha256.c" "$HERE/aes.c" "$HERE/crc32.c" "$B/sha256_zk.o" "$B/aes_zk.o" "$B/crc32_zk.o" \
+  "$HERE/crt.S" "$HERE/dsp.c" "$HERE/sha256.c" "$HERE/aes.c" "$HERE/crc32.c" "$HERE/gf2.c" "$B/sha256_zk.o" "$B/aes_zk.o" "$B/crc32_zk.o" "$B/gf2_zk.o" \
   -o "$B/dsp.elf"
 "${CROSS}objcopy" -O binary "$B/dsp.elf" "$B/dsp.bin"
 python3 "$ROOT/tests/isa/elf2hex.py" "$B/dsp.bin" "$B/dsp.hex"
 "${CROSS}objdump" -d "$B/dsp.elf" > "$B/dsp.dis"
 tohost=$("${CROSS}nm" "$B/dsp.elf" | awk '$3 == "tohost" { print $1 }')
 
-iverilog -g2005 -o "$B/tb_isa.vvp" -I "$ROOT/rtl/pkg" -I "$ROOT/rtl/core" \
+iverilog -g2005 -DTB_MEM_DEPTH=16384 -o "$B/tb_isa.vvp" -I "$ROOT/rtl/pkg" -I "$ROOT/rtl/core" \
   "$ROOT"/rtl/core/*.v "$ROOT"/rtl/cache/*.v \
   "$ROOT/rtl/bus/axi_interconnect.v" "$ROOT/rtl/bus/axi_sram.v" "$ROOT/rtl/bus/axi_periph_bridge.v" \
   "$ROOT"/rtl/periph/*.v "$ROOT/rtl/brv32p_soc.v" "$ROOT/tests/isa/tb_isa.v"
@@ -49,7 +49,7 @@ case "$result" in "RESULT PASS"*) ;; *) exit 1 ;; esac
 python3 "$ROOT/scripts/pipeview.py" check "$B/dsp.pipe" "$B/dsp.trace"
 if [ "$LOCKSTEP" = 1 ]; then
   XBRVDSP_LIB="${XBRVDSP_LIB:-$ROOT/tools/spike_xbrvdsp/build/libxbrvdsp.so}"
-  "$SPIKE" --isa="$MARCH_ZK" --extlib="$XBRVDSP_LIB" --extension=xbrvdsp -m0x80000000:0x8000 \
+  "$SPIKE" --isa="$MARCH_ZK" --extlib="$XBRVDSP_LIB" --extension=xbrvdsp -m0x80000000:0x10000 \
     --log-commits "$B/dsp.elf" 2> "$B/dsp.spike" || true
   python3 "$ROOT/tests/isa/lockstep.py" "$B/dsp.trace" "$B/dsp.spike" | tail -n 1
 fi

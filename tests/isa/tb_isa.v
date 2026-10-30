@@ -21,11 +21,15 @@ module tb_isa;
   wire [31:0] gpio_out;
   wire        uart_tx;
 
+`ifndef TB_MEM_DEPTH
+`define TB_MEM_DEPTH 8192
+`endif
+
   initial clk = 0;
   always #5 clk = ~clk;
 
   brv32p_soc #(
-    .MEM_DEPTH (8192),
+    .MEM_DEPTH (`TB_MEM_DEPTH),     // words; the benchmarks build with 16384 (64 KB)
     .INIT_FILE (""),
     .RESET_PC  (32'h8000_0000)      // tests are linked at 0x8000_0000, like Spike's RAM
   ) dut (

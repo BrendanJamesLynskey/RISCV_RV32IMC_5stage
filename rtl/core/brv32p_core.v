@@ -350,7 +350,10 @@ module brv32p_core #(
   wire [31:0] auipc_result;
   assign auipc_result = pc_ex + imm_ex;
 
-  // MulDiv
+  // MulDiv: the divider runs in EX; a multiply only passes through EX and
+  // computes in MEM
+  wire [2:0]  md_op_ex = ctrl_ex[`CTRL_MULDIV_OP];
+  wire        mul_ex   = ctrl_ex[`CTRL_MULDIV_EN] && !md_op_ex[2];
   wire [31:0] muldiv_result;
   wire        muldiv_busy, muldiv_valid;
 
@@ -478,6 +481,7 @@ module brv32p_core #(
   reg                valid_mem;
   reg [31:0]         raw_mem;
   reg                misaligned_mem;
+  reg  [31:0]        rs1_data_mem;      // a multiply's first operand
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n || flush_mem) begin
@@ -485,6 +489,7 @@ module brv32p_core #(
       pc_mem         <= 32'b0;
       ex_result_mem  <= 32'b0;
       rs2_data_mem   <= 32'b0;
+      rs1_data_mem   <= 32'b0;
       rd_addr_mem    <= 5'b0;
       misaligned_mem <= 1'b0;
       valid_mem      <= 1'b0;
@@ -494,6 +499,7 @@ module brv32p_core #(
       pc_mem         <= pc_ex;
       ex_result_mem  <= ex_result;
       rs2_data_mem   <= rs2_fwd;
+      rs1_data_mem   <= rs1_fwd;
       rd_addr_mem    <= rd_addr_ex;
       misaligned_mem <= misaligned_ex;
       // While EX is stalled (multi-cycle MUL/DIV) this register keeps copying
@@ -513,9 +519,21 @@ module brv32p_core #(
   assign dmem_sign_ext = ctrl_mem[`CTRL_MEM_SIGN];
   assign dmem_wdata    = rs2_data_mem;
 
+  // Multiply, from operands registered at the end of EX. Being in MEM keeps
+  // the multiplier off the forwarding path into EX (the critical path when it
+  // sat in EX); the hazard unit holds a dependent instruction for one cycle,
+  // as after a load.
+  wire [2:0]  md_op_mem = ctrl_mem[`CTRL_MULDIV_OP];
+  wire        mul_mem   = ctrl_mem[`CTRL_MULDIV_EN] && !md_op_mem[2];
+  wire signed [32:0] mul_a = {md_op_mem != MD_MULHU && rs1_data_mem[31], rs1_data_mem};
+  wire signed [32:0] mul_b = {md_op_mem == MD_MULH && rs2_data_mem[31], rs2_data_mem};
+  wire signed [65:0] mul_p = mul_a * mul_b;
+  wire [31:0] mul_result = (md_op_mem == MD_MUL) ? mul_p[31:0] : mul_p[63:32];
+
   // MEM result
   wire [31:0] mem_result;
-  assign mem_result = ctrl_mem[`CTRL_MEM_RD] ? dmem_rdata : ex_result_mem;
+  assign mem_result = ctrl_mem[`CTRL_MEM_RD] ? dmem_rdata :
+                      mul_mem                ? mul_result : ex_result_mem;
 
   // Trap logic
   wire        irq_pending;
@@ -659,6 +677,7 @@ module brv32p_core #(
     .ex_rd            (rd_addr_ex),
     .ex_reg_wr        (ctrl_ex[`CTRL_REG_WR]),
     .ex_mem_rd        (ctrl_ex[`CTRL_MEM_RD]),
+    .ex_mul           (mul_ex),
     .ex_wb_sel        (ctrl_ex[`CTRL_WB_SEL]),
     .mem_rd           (rd_addr_mem),
     .mem_reg_wr       (ctrl_mem[`CTRL_REG_WR]),

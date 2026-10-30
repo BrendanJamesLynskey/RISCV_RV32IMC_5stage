@@ -34,7 +34,7 @@ them):
 | EX | valid, pc, encoding, `rs1`/`rs2`, forwarding select for each (0 register file, 1 from MEM, 2 from WB) |
 | MEM | valid, pc, encoding, `rd`, data-memory read/write, `dmem_stall` |
 | WB | valid (high once, the cycle the instruction retires), pc, encoding, register write enable, `rd`, data |
-| Control | `stall_if/id/ex`, `flush_id/ex/mem`, `mem_stall`, load-use, mul/div busy, mispredict, trap, exception in MEM, interrupt taken, MRET, FENCE.I, trap cause |
+| Control | `stall_if/id/ex`, `flush_id/ex/mem`, `mem_stall`, load-use, divide busy, mispredict, trap, exception in MEM, interrupt taken, MRET, FENCE.I, trap cause, mul-use (added later, at the end, so older traces still parse) |
 
 ## Rebuilding instructions, and checking the rebuild
 
@@ -45,7 +45,7 @@ applying the pipeline registers' own rules to the recorded control signals:
 |---|---|---|---|
 | IF/ID | `flush_id` | `!stall_id && !mem_stall` (a bubble while a straddling instruction completes) | holds |
 | ID/EX | `flush_ex && !mem_stall` (load-use bubble: ID holds; mispredict: ID is squashed) | `!stall_ex && !mem_stall` | holds |
-| EX/MEM | `flush_mem` (a trap) | `!mem_stall`; a bubble while EX is stalled by MUL/DIV | holds |
+| EX/MEM | `flush_mem` (a trap) | `!mem_stall`; a bubble while EX is stalled by a divide | holds |
 | MEM/WB | — | `!mem_stall`; an instruction that traps in MEM does not go on | holds |
 
 `pipeview.py check <x.pipe> <x.trace>` then compares the rebuild with the RTL
@@ -63,7 +63,7 @@ the README) in a scratch copy:
 | Mutant | Caught by the pipe check |
 |---|---|
 | Load-use bubble fires during a memory stall | 6 tests (`ld_st`, `lhu`, `lb`, ... : "EX is a bubble, rebuilt as pc ...") |
-| MUL/DIV copies leak from EX into MEM | `rv32um/div` ("MEM holds pc ..., rebuilt as a bubble") |
+| Divide copies leak from EX into MEM | `rv32um/div` ("MEM holds pc ..., rebuilt as a bubble") |
 
 ## Diagrams
 
@@ -77,7 +77,7 @@ One row per instruction, one column per cycle. `F D X M W` are IF, ID, EX,
 MEM and WB; lower case means the instruction is still in that stage (held);
 `*` marks the cycle it is gone, squashed; `!` a trap. The `events` row gives
 the main event of each cycle: `I` I-cache miss, `D` D-cache miss, `L`
-load-use bubble, `B` MUL/DIV busy, `P` mispredict, `T` trap, `Q` interrupt,
+load-use bubble, `U` mul-use bubble, `B` divide busy, `P` mispredict, `T` trap, `Q` interrupt,
 `R` MRET, `F` FENCE.I.
 
 The examples below are from the test runs, unedited.
@@ -131,7 +131,25 @@ cycles).
   events                            IIIIIIP..P..P.IIIIIIIIII
 ```
 
-### MUL/DIV: EX held for 32 steps
+### Mul-use: a multiply's result is ready after MEM
+
+A multiply computes in MEM (it was moved out of EX to take it off the critical
+path; see the README's FPGA section). Its result cannot be forwarded from MEM
+into EX, so an instruction that uses it at once waits a cycle in ID, exactly
+as after a load, and takes the product forwarded from WB:
+
+```
+   cycle                              60        70
+                                    89012345678901234567
+80000028 li a1,7                    xxxxxMW
+8000002c li a2,6                    dddddXMW
+80000030 mul a3,a1,a2               fffffDXMW
+80000034 addi a4,a3,1                    FDdXMmmmmmmmmmm
+80000038 li t1,43                         FfDXxxxxxxxxxx
+  events                            IIII..U..IIIIIIIIIII
+```
+
+### Divide: EX held for 32 steps
 
 `div` is a 32-step restoring divider: it occupies EX for 34 cycles (cycles
 64 to 97: start, 32 steps, result), holding everything behind it. Here it
@@ -271,8 +289,8 @@ every line in that cycle too.
 `pipeview.lost_cycles` explains every cycle in which no instruction retires.
 Either the pipeline was held (a D-cache wait or an I-cache miss), or WB holds a
 bubble, which is followed back register by register to the cycle that made it:
-a flush (mispredict, trap, MRET, FENCE.I), a load-use bubble, a divide holding
-EX, or fetch delivering nothing while it assembles a 32-bit instruction that
+a flush (mispredict, trap, MRET, FENCE.I), a load-use or mul-use bubble, a
+divide holding EX, or fetch delivering nothing while it assembles a 32-bit instruction that
 straddles two words. The DSP benchmarks (`tests/bench`) report their cycles
 this way.
 

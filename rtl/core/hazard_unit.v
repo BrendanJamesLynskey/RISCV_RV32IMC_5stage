@@ -15,6 +15,7 @@ module hazard_unit (
   input  wire [4:0]  ex_rd,
   input  wire        ex_reg_wr,
   input  wire        ex_mem_rd,     // Load in EX -> stall
+  input  wire        ex_mul,        // Multiply in EX: its result is ready after MEM
   input  wire [2:0]  ex_wb_sel,
 
   // MEM stage info
@@ -53,6 +54,12 @@ module hazard_unit (
   assign load_use_hazard = ex_mem_rd && (ex_rd != 5'd0) &&
                            ((ex_rd == id_rs1) || (ex_rd == id_rs2));
 
+  // ── Mul-use hazard: a multiply computes in MEM, so, like a load, its
+  //    result reaches EX by forwarding from WB, one cycle later ──────────
+  wire mul_use_hazard;
+  assign mul_use_hazard = ex_mul && (ex_rd != 5'd0) &&
+                          ((ex_rd == id_rs1) || (ex_rd == id_rs2));
+
   // ── Data forwarding (based on EX stage addresses) ──────────────────
   always @(*) begin
     // RS1 forwarding
@@ -87,8 +94,8 @@ module hazard_unit (
       stall_id = 1'b1;
       stall_ex = 1'b1;
     end
-    // Load-use: stall IF and ID, insert bubble in EX
-    else if (load_use_hazard) begin
+    // Load-use or mul-use: stall IF and ID, insert bubble in EX
+    else if (load_use_hazard || mul_use_hazard) begin
       stall_if = 1'b1;
       stall_id = 1'b1;
       flush_ex = 1'b1;   // Bubble

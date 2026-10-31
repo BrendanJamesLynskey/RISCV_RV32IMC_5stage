@@ -12,7 +12,7 @@ what it does to the transform.
 | 1 | Packed 2 × 16-bit arithmetic mod q, q in state, Montgomery multiplication, and butterfly instructions (part of Xbrvdsp) | **done** |
 | 2 | The NTT, the inverse NTT, the base multiplication and a whole product a·b, against pq-crystals' reference C | **done** |
 | 3 | A model of ML-KEM checked against NIST's ACVP vectors and C2SP CCTV's accumulated test vectors | **done** |
-| 4 | The whole of ML-KEM (KeyGen, Encaps, Decaps, with Keccak) on the core, run in CI, checked against the same vectors | next |
+| 4 | The whole of ML-KEM (KeyGen, Encaps, Decaps, with Keccak) on the core, run in CI, checked against the same model | **done** |
 | 5 | Power from simulated activity, not Vivado's vectorless default | next |
 
 ## The instructions
@@ -193,3 +193,56 @@ values showed why: they compute ρ‖σ = G(d), as the draft standard did. FIPS 
 So `mlkem.py` has a `draft` switch for the CCTV test, which changes only that hash, and the ACVP vectors check
 the final form. `gen_data.py` re-checks the first 100 CCTV tests in both forms each time it runs, against
 hashes recorded after both full checks passed.
+
+## Step 4: the whole of ML-KEM-512 on the core
+
+`tests/bench/run_kem.sh` builds FIPS 203's KeyGen, Encaps and Decaps (`mlkem_kem.c`, with Keccak-f[1600],
+SHA3 and SHAKE in `keccak.c`) twice: once over the reference arithmetic of step 2 (`mlkem.c`) and once over the
+Xbrvdsp kernels (`mlkem_x.c`: `mlkem_ntt_ct2`, `mlkem_basemul_x`, `mlkem_invntt_x2`), chosen by `-DMLKEM_EXT`.
+The top level is the same code in both builds. It follows pq-crystals on the Montgomery factors: the base
+multiplication leaves ×R⁻¹ and the inverse NTT ×R, so u and v need nothing, and t = A·s + e needs one
+multiply by R (`poly_tomont`) after its accumulated products. The reference's NTT output is Barrett-reduced,
+not in [0, q), so `poly_normalise` brings it there before any encoding; for the extension, whose results are
+always in [0, q), it is nothing.
+
+Each build runs KeyGen(d, z), Encaps(ek, m), Decaps(dk, c) and Decaps of a tampered ciphertext, with d, z and m
+fixed, and compares ek, dk, c and K byte for byte with `mlkem.py` (its final FIPS 203 form, which passes the ACVP
+vectors; `gen_kem.py`). The tampered ciphertext must give the implicit-rejection key J(z‖c′). Before that it
+checks `keccak.c` against `hashlib`'s digests. Both builds are also compiled on the host with gcc and checked
+the same way before any simulation (`HOST=1 run_kem.sh`; `mlkem_x_host.c` computes what the kernels compute,
+in C), which is where the arithmetic was debugged. On the core, every instruction is compared with Spike in
+lockstep, as the kernels were.
+
+Each program is a 128 KB build of its own (`link_kem.ld`; `TB_MEM_DEPTH=32768`, Spike `-m` the same), not part of
+`dsp.elf`. A run is over five million cycles, so the pipeline trace is not written: the testbench's `+marks=`
+file records the cycle at which each marker retires, and `kem_report.py` works from that. `keccak.c` marks
+every permutation, so the report also says how much of each operation is Keccak.
+
+| Operation | Reference | Xbrvdsp | Speed-up | Keccak-f permutations | Cycles in Keccak (ext) | Share of ext |
+|---|---|---|---|---|---|---|
+| KeyGen | 1,433,125 | 1,291,067 | 1.11× | 27 | 1,055,258 | 82% |
+| Encaps | 1,536,007 | 1,313,117 | 1.17× | 26 | 1,018,602 | 78% |
+| Decaps | 1,717,035 | 1,398,671 | 1.23× | 26 | 1,019,496 | 73% |
+| Decaps, tampered ciphertext (rejected) | 1,716,958 | 1,398,428 | 1.23× | 26 | 1,019,471 | 73% |
+| All four | 6,403,125 | 5,401,283 | 1.19× | 105 | 4,112,827 | 76% |
+
+Cycles from CI's build (the reference run retires 4.19 million instructions in 6.97 million cycles, the
+extension's 3.40 million in 5.97 million, the hash checks and result comparisons included). The extension's
+gain on the whole scheme is 1.19×, against 6.1× on a polynomial product alone, because the whole scheme is
+mostly not polynomial arithmetic. With the extension, Keccak is 76% of the total: 105 permutations at 39,169
+cycles each. Everything else (the kernels, the sampling, compression, encoding, and the hashes' absorb and
+squeeze loops) is 1,288,456 cycles across the four operations, against 2,292,699 with the reference
+arithmetic: the kernels take 1,004,243 cycles off, 44% of what is not Keccak, and the reference build itself
+spends 64% in Keccak, the same 105 permutations. KeyGen gains least (1.11×): it has four NTTs and four base
+multiplications but no inverse NTT, where the reference is slowest, and the most Keccak (SampleNTT for A, four
+CBD samples, and H of the 800-byte key).
+
+Why Keccak costs what it does here: `keccak.c` is plain C with 64-bit lanes, which rv32imc's GCC splits into
+register pairs, and the state (50 words) does not fit the register file, so each step of a round loads and
+stores its lanes. A permutation is about 20,000 instructions at an IPC near 0.5, the loss being the
+write-through D-cache's store waits, which step 2 met in the NTT. An earlier version, with the lane indices
+computed as `(x + 1) % 5` in loops and the rotations from a table, took 116,000 cycles a permutation: each
+`% 5` became a hardware divide and each rotation a variable 64-bit shift. The constant-index form is the
+one measured. The next useful step for the whole scheme would be a Keccak with 32-bit bit-interleaved lanes,
+as pqm4 uses on Cortex-M4, or a Keccak instruction; either is a separate question from the arithmetic mod q
+this part is about.

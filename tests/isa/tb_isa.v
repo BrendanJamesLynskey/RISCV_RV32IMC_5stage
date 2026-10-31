@@ -10,6 +10,10 @@
 //   +pipe=<file>       optional: write a per-cycle pipeline trace (what each
 //                      stage holds and the hazard unit's decisions), read by
 //                      scripts/pipeview.py
+//   +marks=<file>      optional: write "n cycle" when each BENCH_MARK(n)
+//                      ("slti zero, zero, n", tests/bench/bench.h) retires:
+//                      cycles per benchmark without the pipeline trace,
+//                      which is too large for a multi-million-cycle run
 // The test stores 1 to tohost on success, or (testnum << 1) | 1 on failure;
 // the store is seen on the core's retire trace. Prints one line:
 //   RESULT PASS|FAIL|TIMEOUT <cycles> cycles <n> retired [failing test case]
@@ -29,7 +33,7 @@ module tb_isa;
   always #5 clk = ~clk;
 
   brv32p_soc #(
-    .MEM_DEPTH (`TB_MEM_DEPTH),     // words; the benchmarks build with 16384 (64 KB)
+    .MEM_DEPTH (`TB_MEM_DEPTH),     // words; the benchmarks build with 16384 (64 KB), ML-KEM with 32768
     .INIT_FILE (""),
     .RESET_PC  (32'h8000_0000)      // tests are linked at 0x8000_0000, like Spike's RAM
   ) dut (
@@ -43,9 +47,9 @@ module tb_isa;
 
   `define CORE dut.u_core
 
-  reg [8*512-1:0] hex_file, trace_file, pipe_file;   // paths up to 512 characters
+  reg [8*512-1:0] hex_file, trace_file, pipe_file, marks_file;   // paths up to 512 characters
   reg [31:0]   tohost;
-  integer      timeout, cycles, retired, trace_fd, hex_fd, pipe_fd;
+  integer      timeout, cycles, retired, trace_fd, hex_fd, pipe_fd, marks_fd;
 
   initial begin
     if (!$value$plusargs("hex=%s", hex_file)) begin
@@ -59,6 +63,8 @@ module tb_isa;
     if (!$value$plusargs("timeout=%d", timeout)) timeout = 200000;
     trace_fd = 0;
     if ($value$plusargs("trace=%s", trace_file)) trace_fd = $fopen(trace_file, "w");
+    marks_fd = 0;
+    if ($value$plusargs("marks=%s", marks_file)) marks_fd = $fopen(marks_file, "w");
     pipe_fd = 0;
     if ($value$plusargs("pipe=%s", pipe_file)) begin
       pipe_fd = $fopen(pipe_file, "w");
@@ -146,6 +152,9 @@ module tb_isa;
     if (`CORE.retire_valid) begin
       retired = retired + 1;
       if (trace_fd != 0) log_retire;
+      // BENCH_MARK(n): slti zero, zero, n (OP-IMM, funct3 010, rd and rs1 zero)
+      if (marks_fd != 0 && `CORE.retire_insn[19:0] == 20'h02013)
+        $fwrite(marks_fd, "%0d %0d\n", `CORE.retire_insn[31:20], cycles);
       if (`CORE.retire_mem_we && `CORE.retire_mem_addr == tohost) begin
         if (`CORE.retire_mem_wdata == 32'd1)
           $display("RESULT PASS %0d cycles %0d retired", cycles, retired);
@@ -157,6 +166,7 @@ module tb_isa;
                    cycles, retired, `CORE.retire_mem_wdata >> 1);
         if (trace_fd != 0) $fclose(trace_fd);
         if (pipe_fd != 0) $fclose(pipe_fd);
+        if (marks_fd != 0) $fclose(marks_fd);
         $finish;
       end
     end
@@ -164,6 +174,7 @@ module tb_isa;
       $display("RESULT TIMEOUT %0d cycles %0d retired (last pc 0x%08h)", cycles, retired, `CORE.retire_pc);
       if (trace_fd != 0) $fclose(trace_fd);
       if (pipe_fd != 0) $fclose(pipe_fd);
+      if (marks_fd != 0) $fclose(marks_fd);
       $finish;
     end
   end

@@ -1,4 +1,4 @@
-# CI: ISA tests in lockstep with Spike, the SoC testbenches, and lint.
+# CI: ISA tests in lockstep with Spike, the SoC testbenches, lint, and ML-KEM on the core.
 name: CI
 
 on:
@@ -64,6 +64,63 @@ jobs:
             tests/isa/build/*.trace
             tests/isa/build/*.spike
             tests/bench/build/report.txt
+
+  # The whole of ML-KEM-512 (tests/bench/run_kem.sh): one job per polynomial
+  # back end, in parallel, as each is millions of cycles of Icarus.
+  kem:
+    name: ML-KEM-512 on the core, in lockstep with Spike (${{ matrix.backend }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [ref, ext]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain and simulator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-unknown-elf iverilog device-tree-compiler
+
+      - name: Restore Spike
+        id: spike-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/spike
+          key: spike-${{ env.SPIKE_REV }}-ubuntu-24.04-with-headers
+
+      - name: Build Spike
+        if: steps.spike-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/riscv-software-src/riscv-isa-sim.git /tmp/spike-src
+          cd /tmp/spike-src
+          git checkout "$SPIKE_REV"
+          git submodule update --init --depth 1
+          mkdir build && cd build
+          ../configure --prefix="$HOME/spike" --with-boost=no
+          make -j"$(nproc)"
+          make install
+          mkdir -p "$HOME/spike/src/build"
+          cp -rL ../riscv ../fesvr ../softfloat ../fdt "$HOME/spike/src/"
+          cp config.h insn_list.h "$HOME/spike/src/build/"
+
+      - name: Build the Spike model of the DSP extension
+        run: tools/spike_xbrvdsp/build.sh "$HOME/spike/src" "$HOME/spike/src/build"
+
+      - name: Check both builds against the model on the host
+        run: HOST=1 tests/bench/run_kem.sh
+
+      - name: Run ML-KEM-512 on the core
+        run: SPIKE="$HOME/spike/bin/spike" tests/bench/run_kem.sh ${{ matrix.backend }}
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kem-${{ matrix.backend }}
+          path: |
+            tests/bench/build/kem_*.txt
+            tests/bench/build/kem_*.marks
 
   soc-testbenches:
     name: SoC testbenches (Verilog and cocotb)

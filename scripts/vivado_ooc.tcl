@@ -38,6 +38,15 @@ report_timing         -max_paths 1 -nworst 1 -path_type full -file $out/critical
 # activity) at the constrained clock; the hierarchy shows each unit's share.
 # A comparison between designs, not a prediction for a given program.
 report_power          -hierarchical_depth 4 -file $out/power.rpt
+# With SAIF_FILES set (tests/power/run_saif.sh), the same again from each
+# program's simulated activity: power_<name>.rpt for <name>.saif
+if {[info exists ::env(SAIF_FILES)]} {
+  foreach saif $::env(SAIF_FILES) {
+    reset_switching_activity -all
+    read_saif -strip_path tb_isa/dut $saif
+    report_power -hierarchical_depth 4 -file $out/power_[file rootname [file tail $saif]].rpt
+  }
+}
 
 set wns  [get_property SLACK [get_timing_paths -max_paths 1 -setup]]
 set fmax [expr {1000.0 / ($period - $wns)}]

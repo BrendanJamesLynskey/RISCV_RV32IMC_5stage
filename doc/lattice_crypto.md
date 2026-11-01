@@ -13,7 +13,7 @@ what it does to the transform.
 | 2 | The NTT, the inverse NTT, the base multiplication and a whole product a·b, against pq-crystals' reference C | **done** |
 | 3 | A model of ML-KEM checked against NIST's ACVP vectors and C2SP CCTV's accumulated test vectors | **done** |
 | 4 | The whole of ML-KEM (KeyGen, Encaps, Decaps, with Keccak) on the core, run in CI, checked against the same model | **done** |
-| 5 | Power from simulated activity, not Vivado's vectorless default | next |
+| 5 | Power from simulated activity, not Vivado's vectorless default | **done** |
 
 ## The instructions
 
@@ -244,5 +244,39 @@ write-through D-cache's store waits, which step 2 met in the NTT. An earlier ver
 computed as `(x + 1) % 5` in loops and the rotations from a table, took 116,000 cycles a permutation: each
 `% 5` became a hardware divide and each rotation a variable 64-bit shift. The constant-index form is the
 one measured. The next useful step for the whole scheme would be a Keccak with 32-bit bit-interleaved lanes,
-as pqm4 uses on Cortex-M4, or a Keccak instruction; either is a separate question from the arithmetic mod q
+as pqm4 uses on 32-bit microcontrollers, or a Keccak instruction; either is a separate question from the arithmetic mod q
 this part is about.
+
+## Step 5: power from simulated activity
+
+`tests/power/run_saif.sh` runs a small program (`saif_polymul.c`: four polynomial products a·b in a row,
+the last checked against `gen_data.py`) on the SoC in Vivado's simulator, xsim, twice: with pq-crystals'
+reference C and with the `mq_unit` kernels. Each run writes the SoC's switching activity as SAIF.
+`scripts/vivado_ooc.tcl` with `SAIF_FILES` set then reports power for each, on the same placed and routed
+design as the vectorless figure (100 MHz constraint, Vivado 2025.2):
+
+| | Vectorless | Reference C, simulated | `mq_unit` kernels, simulated |
+|---|---|---|---|
+| Dynamic power | 137 mW | 171 mW | 115 mW |
+| of which the core / `u_mq` | 116 / 14 mW | 158 / 20 mW | 101 / 18 mW |
+| Static power | 85 mW | 85 mW | 85 mW |
+| Cycles per product (steady state) | | 94,241 | 15,443 |
+| Energy per product at 100 MHz, dynamic | | 161 µJ | 17.8 µJ (9.1× less) |
+| Energy per product, with static | | 241 µJ | 30.9 µJ (7.8× less) |
+
+The kernels draw less power as well as running for less time (115 against 171 mW dynamic over the whole
+run), so the energy saving is larger than the 6.1× in cycles.
+
+**How far to trust it.** The SAIF comes from the RTL simulation, so Vivado can match it only to nets that
+keep their RTL names after synthesis: 1,575 of 23,903 (7%), mostly registers and ports. It propagates
+activity from those through the logic it cannot match. That is much better than the default toggle rate
+for every net (the confidence level stays "Medium"), but the figures are estimates, good for comparing
+these two programs on this design, not a measurement. Two things to read with that in mind:
+
+- `u_mq` is not idle in the reference run (20 mW) even though no instruction uses it. Its multipliers take
+  their operands straight from EX's operand buses, which change on every instruction; only the registers
+  after them load on an mq instruction. Operand isolation (gating the multiplier inputs to zero unless an
+  mq instruction is in EX) would remove most of that, at the cost of a mux on the operand path.
+- A SAIF from a simulation of the routed netlist (`write_verilog -mode funcsim`) would match nearly every
+  net. It is far slower to simulate; the RTL SAIF is what this step used.
+

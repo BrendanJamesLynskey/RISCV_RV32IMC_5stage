@@ -66,14 +66,20 @@ jobs:
             tests/bench/build/report.txt
 
   # The whole of ML-KEM-512 (tests/bench/run_kem.sh): one job per polynomial
-  # back end, in parallel, as each is millions of cycles of Icarus.
+  # back end and Keccak variant (64-bit lanes, bit-interleaved 32-bit lanes,
+  # the same with Zbkb), in parallel, as each is millions of cycles of Icarus.
   kem:
-    name: ML-KEM-512 on the core, in lockstep with Spike (${{ matrix.backend }})
+    name: ML-KEM-512 on the core, in lockstep with Spike (${{ matrix.backend }}, Keccak ${{ matrix.keccak }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        backend: [ref, ext]
+        include:
+          - { backend: ref, keccak: "64" }
+          - { backend: ext, keccak: "64" }
+          - { backend: ext, keccak: bi }
+          - { backend: ext, keccak: bi_zbkb }
+          - { backend: ref, keccak: bi_zbkb }
     steps:
       - uses: actions/checkout@v4
 
@@ -108,16 +114,16 @@ jobs:
         run: tools/spike_xbrvdsp/build.sh "$HOME/spike/src" "$HOME/spike/src/build"
 
       - name: Check both builds against the model on the host
-        run: HOST=1 tests/bench/run_kem.sh
+        run: HOST=1 tests/bench/run_kem.sh   # both back ends, all three Keccak variants
 
       - name: Run ML-KEM-512 on the core
-        run: SPIKE="$HOME/spike/bin/spike" tests/bench/run_kem.sh ${{ matrix.backend }}
+        run: KECCAK=${{ matrix.keccak }} SPIKE="$HOME/spike/bin/spike" tests/bench/run_kem.sh ${{ matrix.backend }}
 
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: kem-${{ matrix.backend }}
+          name: kem-${{ matrix.backend }}-${{ matrix.keccak }}
           path: |
             tests/bench/build/kem_*.txt
             tests/bench/build/kem_*.marks

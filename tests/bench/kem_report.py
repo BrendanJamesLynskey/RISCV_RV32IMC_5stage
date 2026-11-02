@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Report cycles per ML-KEM operation from the testbench's marker file.
 
-Usage: kem_report.py <ref|ext> <kem_<be>.marks>
+Usage: kem_report.py <ref|ext> <kem_<be>.marks> [keccak label]
 
 The marker file (tb_isa.v, +marks=) has one line, "n cycle", for each
 BENCH_MARK(n) that retired. kem_main.c brackets each operation with a pair
@@ -28,7 +28,8 @@ def main():
         elif n == 11 and entry is not None:
             perms.append((entry, c))
             entry = None
-    print(f"ML-KEM-512, {backend} arithmetic")
+    label = f", {sys.argv[3]} Keccak" if len(sys.argv) > 3 else ""
+    print(f"ML-KEM-512, {backend} arithmetic{label}")
     print(f"{'operation':<34}{'cycles':>11}{'Keccak-f':>10}{'in Keccak':>12}{'share':>8}")
     total = total_keccak = n_perms = 0
     for begin, name in OPS:

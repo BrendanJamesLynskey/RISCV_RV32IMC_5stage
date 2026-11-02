@@ -7,12 +7,15 @@
 #include <stddef.h>
 
 /* A sponge: the state as 25 lanes (or 200 bytes: the two views share
-   storage, which assumes a little-endian machine, as RV32 and x86 are),
+   storage, which assumes a little-endian machine, as RV32 and x86 are; the
+   bit-interleaved builds, -DKECCAK_BI and -DKECCAK_BI_ZBKB, keep it as 50
+   words instead and convert at absorb and squeeze, see keccak.c),
    the rate in bytes, and the position of the next byte to absorb or
    squeeze. */
 typedef struct {
   union {
     uint64_t lane[25];
+    uint32_t w[50];     /* the bit-interleaved builds: lane i is w[2i] (even bits), w[2i + 1] (odd) */
     uint8_t byte[200];
   } s;
   unsigned rate, pos;
@@ -23,7 +26,11 @@ typedef struct {
 #define SHA3_256_RATE 136
 #define SHA3_512_RATE 72
 
+#if defined(KECCAK_BI) || defined(KECCAK_BI_ZBKB)
+void keccak_f1600_bi(uint32_t w[50]);
+#else
 void keccak_f1600(uint64_t s[25]);
+#endif
 
 /* Incremental use (SampleNTT draws from SHAKE128 until it has enough):
    init, absorb any number of times, finish once (pad is 0x1F for SHAKE,

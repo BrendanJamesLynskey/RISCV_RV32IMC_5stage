@@ -1,19 +1,281 @@
 /* keccak.c — Keccak-f[1600] and the FIPS 202 functions ML-KEM uses
-   (SHA3-256, SHA3-512, SHAKE128, SHAKE256), in plain portable C: the lanes
-   are uint64_t, which rv32imc's GCC splits into register pairs, and the
-   permutation is written as the standard's five steps (theta, rho, pi,
-   chi, iota), one round at a time, the rounds not unrolled. It is the
-   Keccak every ML-KEM operation spends most of its time in, so it is kept
-   straightforward: a faster one is a separate question from the
-   arithmetic mod q. Each permutation is bracketed by BENCH_MARK(10) and
-   (11) on the core, so run_kem.sh can count the permutations in each
-   operation and the cycles they take; on the host the markers are empty. */
+   (SHA3-256, SHA3-512, SHAKE128, SHAKE256), in plain portable C, in three
+   builds chosen by a macro (the same keccak.h API in each):
+
+   (none)           the lanes are uint64_t, which rv32imc's GCC splits into
+                    register pairs, and the permutation is written as the
+                    standard's five steps (theta, rho, pi, chi, iota), one
+                    round at a time, the rounds not unrolled. It is the
+                    baseline, kept straightforward.
+   -DKECCAK_BI      bit-interleaved 32-bit lanes (as in XKCP's inplace32BI
+                    and pqm4): each 64-bit lane is held as two words, its
+                    even bits and its odd bits, so a 64-bit rotation is two
+                    32-bit rotations, and no 64-bit value is ever formed.
+   -DKECCAK_BI_ZBKB the same, with Zbkb's zip and unzip for converting
+                    lanes to and from the interleaved form at absorb and
+                    squeeze. (rori and andn need no source change: GCC
+                    uses them when -march has _zbkb.) Where the target has
+                    no Zbkb, as on the host, zip and unzip are plain C.
+
+   Each permutation is bracketed by BENCH_MARK(10) and (11) on the core,
+   so run_kem.sh can count the permutations in each operation and the
+   cycles they take; on the host the markers are empty. */
 #include "keccak.h"
 #ifdef __riscv
 #include "bench.h"
 #else
 #define BENCH_MARK(n) do {} while (0)
 #endif
+
+void keccak_init(keccak_t *st, unsigned rate)
+{
+  for (unsigned i = 0; i < 25; i++)
+    st->s.lane[i] = 0;
+  st->rate = rate;
+  st->pos = 0;
+}
+
+#if defined(KECCAK_BI) || defined(KECCAK_BI_ZBKB)
+
+/* The state is 50 words: lane i is w[2i] (its even bits: bit k of the word
+   is bit 2k of the lane) and w[2i + 1] (its odd bits). Rotating a lane left
+   by 2m rotates both words left by m; by 2m + 1 swaps them and rotates
+   one of them one place further. */
+static const uint32_t RCI[48] = {
+  0x00000001, 0x00000000, 0x00000000, 0x00000089,
+  0x00000000, 0x8000008b, 0x00000000, 0x80008080,
+  0x00000001, 0x0000008b, 0x00000001, 0x00008000,
+  0x00000001, 0x80008088, 0x00000001, 0x80000082,
+  0x00000000, 0x0000000b, 0x00000000, 0x0000000a,
+  0x00000001, 0x00008082, 0x00000000, 0x00008003,
+  0x00000001, 0x0000808b, 0x00000001, 0x8000000b,
+  0x00000001, 0x8000008a, 0x00000001, 0x80000081,
+  0x00000000, 0x80000081, 0x00000000, 0x80000008,
+  0x00000000, 0x00000083, 0x00000000, 0x80008003,
+  0x00000001, 0x80008088, 0x00000000, 0x80000088,
+  0x00000001, 0x00008000, 0x00000000, 0x80008082
+};
+
+/* rotate left by a constant. With Zbkb it is rori (there is no immediate
+   rotate left in the extension, and GCC would load the amount into a
+   register and use rol), otherwise shifts and an or */
+static inline __attribute__((always_inline)) uint32_t rol32(uint32_t x, unsigned n)
+{
+  unsigned r = (32 - n) & 31;
+#if defined(KECCAK_BI_ZBKB) && defined(__riscv_zbkb)
+  uint32_t y;
+  if (r == 0)
+    return x;
+  __asm__("rori %0, %1, %2" : "=r" (y) : "r" (x), "i" (r));
+  return y;
+#else
+  return r ? (x >> r) | (x << (32 - r)) : x;
+#endif
+}
+
+static inline __attribute__((always_inline))
+void rot64(uint32_t *re, uint32_t *ro, uint32_t e, uint32_t o, unsigned n)
+{
+  if (n & 1) {
+    *re = rol32(o, (n >> 1) + 1);
+    *ro = rol32(e, n >> 1);
+  } else {
+    *re = rol32(e, n >> 1);
+    *ro = rol32(o, n >> 1);
+  }
+}
+
+/* One output plane y: lane k of it is the input lane i, with column x's
+   theta value xored in, rotated by n (rho and pi); then chi along the
+   plane. The input and output are different arrays, as an output plane
+   overwrites lanes a later plane still needs. */
+#define LANE(k, i, x, n) \
+  rot64(&ae[k], &ao[k], in[2 * (i)] ^ de[x], in[2 * (i) + 1] ^ dd[x], n)
+#define CHI(y)                                                          \
+  do {                                                                  \
+    _Pragma("GCC unroll 5")                                              \
+    for (unsigned k = 0; k < 5; k++) {                                  \
+      out[2 * (5 * (y) + k)]     = ae[k] ^ (~ae[(k + 1) % 5] & ae[(k + 2) % 5]); \
+      out[2 * (5 * (y) + k) + 1] = ao[k] ^ (~ao[(k + 1) % 5] & ao[(k + 2) % 5]); \
+    }                                                                   \
+  } while (0)
+
+#define ROUND(src, dst, rc)                                             \
+  do {                                                                  \
+    const uint32_t *in = (src);                                         \
+    uint32_t *out = (dst);                                              \
+    uint32_t ce[5], cd[5], de[5], dd[5], ae[5], ao[5];                  \
+    _Pragma("GCC unroll 5")                                              \
+    for (unsigned x = 0; x < 5; x++) {                                  \
+      ce[x] = in[2 * x] ^ in[2 * x + 10] ^ in[2 * x + 20] ^ in[2 * x + 30] ^ in[2 * x + 40]; \
+      cd[x] = in[2 * x + 1] ^ in[2 * x + 11] ^ in[2 * x + 21] ^ in[2 * x + 31] ^ in[2 * x + 41]; \
+    }                                                                   \
+    _Pragma("GCC unroll 5")                                              \
+    for (unsigned x = 0; x < 5; x++) {   /* D = C[x-1] ^ rotl64(C[x+1], 1) */ \
+      de[x] = ce[(x + 4) % 5] ^ rol32(cd[(x + 1) % 5], 1);              \
+      dd[x] = cd[(x + 4) % 5] ^ ce[(x + 1) % 5];                        \
+    }                                                                   \
+    LANE(0, 0, 0, 0);  LANE(1, 6, 1, 44);  LANE(2, 12, 2, 43); LANE(3, 18, 3, 21); LANE(4, 24, 4, 14); \
+    CHI(0);                                                             \
+    out[0] ^= (rc)[0]; out[1] ^= (rc)[1];                               \
+    LANE(0, 3, 3, 28); LANE(1, 9, 4, 20);  LANE(2, 10, 0, 3);  LANE(3, 16, 1, 45); LANE(4, 22, 2, 61); \
+    CHI(1);                                                             \
+    LANE(0, 1, 1, 1);  LANE(1, 7, 2, 6);   LANE(2, 13, 3, 25); LANE(3, 19, 4, 8);  LANE(4, 20, 0, 18); \
+    CHI(2);                                                             \
+    LANE(0, 4, 4, 27); LANE(1, 5, 0, 36);  LANE(2, 11, 1, 10); LANE(3, 17, 2, 15); LANE(4, 23, 3, 56); \
+    CHI(3);                                                             \
+    LANE(0, 2, 2, 62); LANE(1, 8, 3, 55);  LANE(2, 14, 4, 39); LANE(3, 15, 0, 41); LANE(4, 21, 1, 2); \
+    CHI(4);                                                             \
+  } while (0)
+
+/* Two rounds per pass, the second reading what the first wrote, so the
+   result of 24 rounds lands back in w */
+void keccak_f1600_bi(uint32_t w[50])
+{
+  uint32_t t[50];
+  BENCH_MARK(10);
+  for (unsigned r = 0; r < 48; r += 4) {
+    ROUND(w, t, RCI + r);
+    ROUND(t, w, RCI + r + 2);
+  }
+  BENCH_MARK(11);
+}
+
+/* zip and unzip (Zbkb): unzip32 gathers a word's even bits into its low
+   half and its odd bits into its high half; zip32 is the inverse */
+#if defined(KECCAK_BI_ZBKB) && defined(__riscv_zbkb)
+static inline uint32_t unzip32(uint32_t x)
+{
+  uint32_t r;
+  __asm__("unzip %0, %1" : "=r" (r) : "r" (x));
+  return r;
+}
+static inline uint32_t zip32(uint32_t x)
+{
+  uint32_t r;
+  __asm__("zip %0, %1" : "=r" (r) : "r" (x));
+  return r;
+}
+#else
+static uint32_t unzip32(uint32_t x)
+{
+  uint32_t t;
+  t = (x ^ (x >> 1)) & 0x22222222u; x ^= t ^ (t << 1);
+  t = (x ^ (x >> 2)) & 0x0C0C0C0Cu; x ^= t ^ (t << 2);
+  t = (x ^ (x >> 4)) & 0x00F000F0u; x ^= t ^ (t << 4);
+  t = (x ^ (x >> 8)) & 0x0000FF00u; x ^= t ^ (t << 8);
+  return x;
+}
+static uint32_t zip32(uint32_t x)
+{
+  uint32_t t;
+  t = (x ^ (x >> 8)) & 0x0000FF00u; x ^= t ^ (t << 8);
+  t = (x ^ (x >> 4)) & 0x00F000F0u; x ^= t ^ (t << 4);
+  t = (x ^ (x >> 2)) & 0x0C0C0C0Cu; x ^= t ^ (t << 2);
+  t = (x ^ (x >> 1)) & 0x22222222u; x ^= t ^ (t << 1);
+  return x;
+}
+#endif
+
+/* A 64-bit lane, as low and high words, to and from (even, odd) */
+static inline void interleave(uint32_t lo, uint32_t hi, uint32_t *e, uint32_t *o)
+{
+  uint32_t a = unzip32(lo), b = unzip32(hi);
+  *e = (a & 0xFFFFu) | (b << 16);
+  *o = (a >> 16) | (b & 0xFFFF0000u);
+}
+
+static inline void deinterleave(uint32_t e, uint32_t o, uint32_t *lo, uint32_t *hi)
+{
+  *lo = zip32((e & 0xFFFFu) | (o << 16));
+  *hi = zip32((e >> 16) | (o & 0xFFFF0000u));
+}
+
+static uint32_t load32(const uint8_t *p)
+{
+  return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+}
+
+static void store32(uint8_t *p, uint32_t v)
+{
+  p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); p[2] = (uint8_t)(v >> 16); p[3] = (uint8_t)(v >> 24);
+}
+
+/* XOR byte b into the state at byte position pos (a byte is its own lane
+   with a single non-zero byte) */
+static void xor_byte(keccak_t *st, unsigned pos, uint8_t b)
+{
+  unsigned sh = (pos & 7) * 8;
+  uint32_t lo = sh < 32 ? (uint32_t)b << sh : 0, hi = sh < 32 ? 0 : (uint32_t)b << (sh - 32);
+  uint32_t e, o;
+  interleave(lo, hi, &e, &o);
+  st->s.w[2 * (pos >> 3)] ^= e;
+  st->s.w[2 * (pos >> 3) + 1] ^= o;
+}
+
+static uint8_t get_byte(const keccak_t *st, unsigned pos)
+{
+  uint32_t lo, hi;
+  deinterleave(st->s.w[2 * (pos >> 3)], st->s.w[2 * (pos >> 3) + 1], &lo, &hi);
+  unsigned sh = (pos & 7) * 8;
+  return (uint8_t)((sh < 32 ? lo >> sh : hi >> (sh - 32)) & 0xFF);
+}
+
+static void permute(keccak_t *st)
+{
+  keccak_f1600_bi(st->s.w);
+}
+
+void keccak_absorb(keccak_t *st, const uint8_t *in, size_t len)
+{
+  while (len) {
+    if ((st->pos & 7) == 0 && len >= 8 && st->pos + 8 <= st->rate) {
+      uint32_t e, o;                        /* a whole lane at once */
+      interleave(load32(in), load32(in + 4), &e, &o);
+      st->s.w[2 * (st->pos >> 3)] ^= e;
+      st->s.w[2 * (st->pos >> 3) + 1] ^= o;
+      st->pos += 8; in += 8; len -= 8;
+    } else {
+      xor_byte(st, st->pos++, *in++);
+      len--;
+    }
+    if (st->pos == st->rate) {
+      permute(st);
+      st->pos = 0;
+    }
+  }
+}
+
+/* Pad (the domain byte, then 1 in the rate's last bit), and start the
+   first output block */
+void keccak_finish(keccak_t *st, uint8_t pad)
+{
+  xor_byte(st, st->pos, pad);
+  xor_byte(st, st->rate - 1, 0x80);
+  permute(st);
+  st->pos = 0;
+}
+
+void keccak_squeeze(keccak_t *st, uint8_t *out, size_t len)
+{
+  while (len) {
+    if (st->pos == st->rate) {
+      permute(st);
+      st->pos = 0;
+    }
+    if ((st->pos & 7) == 0 && len >= 8 && st->pos + 8 <= st->rate) {
+      uint32_t lo, hi;
+      deinterleave(st->s.w[2 * (st->pos >> 3)], st->s.w[2 * (st->pos >> 3) + 1], &lo, &hi);
+      store32(out, lo); store32(out + 4, hi);
+      st->pos += 8; out += 8; len -= 8;
+    } else {
+      *out++ = get_byte(st, st->pos++);
+      len--;
+    }
+  }
+}
+
+#else
 
 static const uint64_t RC[24] = {
   0x0000000000000001ull, 0x0000000000008082ull, 0x800000000000808aull, 0x8000000080008000ull,
@@ -67,14 +329,6 @@ void keccak_f1600(uint64_t s[25])
   BENCH_MARK(11);
 }
 
-void keccak_init(keccak_t *st, unsigned rate)
-{
-  for (unsigned i = 0; i < 25; i++)
-    st->s.lane[i] = 0;
-  st->rate = rate;
-  st->pos = 0;
-}
-
 void keccak_absorb(keccak_t *st, const uint8_t *in, size_t len)
 {
   while (len--) {
@@ -106,6 +360,8 @@ void keccak_squeeze(keccak_t *st, uint8_t *out, size_t len)
     *out++ = st->s.byte[st->pos++];
   }
 }
+
+#endif
 
 static void hash(uint8_t *out, size_t outlen, const uint8_t *in, size_t inlen, unsigned rate, uint8_t pad)
 {

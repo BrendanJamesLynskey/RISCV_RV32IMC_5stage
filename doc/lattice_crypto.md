@@ -14,6 +14,7 @@ what it does to the transform.
 | 3 | A model of ML-KEM checked against NIST's ACVP vectors and C2SP CCTV's accumulated test vectors | **done** |
 | 4 | The whole of ML-KEM (KeyGen, Encaps, Decaps, with Keccak) on the core, run in CI, checked against the same model | **done** |
 | 5 | Power from simulated activity, not Vivado's vectorless default | **done** |
+| 6 | A faster Keccak in software (bit-interleaved 32-bit lanes, with Zbkb), whole ML-KEM re-measured | **done** |
 
 ## The instructions
 
@@ -280,3 +281,70 @@ these two programs on this design, not a measurement. Two things to read with th
 - A SAIF from a simulation of the routed netlist (`write_verilog -mode funcsim`) would match nearly every
   net. It is far slower to simulate; the RTL SAIF is what this step used.
 
+## Step 6: a faster Keccak
+
+Step 4 left Keccak-f[1600] as three quarters of the extension build: 105 permutations at 39,169 cycles. Step 6
+replaces it in software, with no change to the core. `keccak.c` now has three builds behind the same
+`keccak.h` API, chosen by a macro, and `run_kem.sh` takes `KECCAK=64|bi|bi_zbkb`:
+
+- **64** (the default): the original, 64-bit lanes split into register pairs by GCC.
+- **bi** (`-DKECCAK_BI`): bit-interleaved 32-bit lanes, as XKCP's inplace32BI and pqm4 do on 32-bit
+  microcontrollers. A lane is held as two words, its even bits and its odd bits, so a 64-bit rotation is two
+  32-bit rotations (or a swap and two) and no 64-bit value exists. Plain rv32imc: a rotation is
+  shift, shift, or.
+- **bi_zbkb** (`-DKECCAK_BI_ZBKB`, built with `_zbkb` in `-march`): the same, with `rori` for the rotations,
+  `andn` for chi (GCC picks both without source changes), and `zip`/`unzip` for converting lanes to and from
+  interleaved form at absorb and squeeze. On the host, where there is no Zbkb, `zip`/`unzip` are plain C.
+
+One round is one pass of the loop, written with constant lane indices and rotations like the original (a
+`% 5` in the loop became a hardware divide again until the loops were unrolled). It reads one 50-word array and writes
+another (an output plane overwrites lanes a later plane still needs), swapping the two each round, so 24
+rounds leave the result in the state. Theta, rho, pi and chi are fused: each output plane takes its five
+lanes from the input, xors in theta's D, rotates, and does chi straight away, so every state word is loaded
+about twice and stored once per round. The state stays interleaved in `keccak_t`; absorb and squeeze convert
+a whole lane at a time (a byte at a time at the edges, which SHAKE128's 168-byte blocks and the 32-byte
+hashes never reach after the first lane).
+
+**The I-cache decides it.** The first version unrolled two rounds per pass: 3.4 KB of straight-line code
+against a 2 KB I-cache, so every pass refilled it, and a permutation took 51,101 cycles, slower than the
+original. One round per pass is 1.8 KB with Zbkb and 2.4 KB without, and that is the difference between 16,707 and
+29,258 cycles below: the plain variant still does not quite fit.
+
+| Keccak-f[1600] variant | Cycles per permutation | Code, bytes | Speed-up |
+|---|---|---|---|
+| 64-bit lanes (step 4) | 39,174 | 3,072 | 1.00× |
+| bit-interleaved, rv32imc | 29,258 | 2,476 (+ conversion code) | 1.34× |
+| bit-interleaved, Zbkb | 16,707 | 1,862 (+ conversion code) | 2.34× |
+
+(Cycles from CI, the mean of the 105 permutations of the extension build; the reference build gives
+39,168 and 16,683. Code size is the permutation function alone.)
+
+The whole of ML-KEM-512, with the fastest Keccak (bit-interleaved, Zbkb), each in lockstep with Spike and
+checked byte for byte as before:
+
+| Operation | Reference | Xbrvdsp | Speed-up | Keccak-f permutations | Cycles in Keccak (ext) | Share of ext |
+|---|---|---|---|---|---|---|
+| KeyGen | 813,225 | 670,864 | 1.21× | 27 | 448,715 | 67% |
+| Encaps | 938,981 | 715,958 | 1.31× | 26 | 434,701 | 61% |
+| Decaps | 1,119,630 | 801,387 | 1.40× | 26 | 435,478 | 54% |
+| Decaps, tampered ciphertext (rejected) | 1,119,572 | 801,680 | 1.40× | 26 | 435,372 | 54% |
+| All four | 3,991,408 | 2,989,889 | 1.33× | 105 | 1,754,266 | 59% |
+
+Against step 4's original reference (plain C arithmetic and 64-bit Keccak, 6,406,500 cycles in this run;
+6,403,125 in step 4's, the difference being code placement) the extension build with the fast Keccak is
+**2.14× faster** (2,989,889 cycles), and 1.81× faster than the extension with the old Keccak (5,404,454).
+Each operation gains about the same, 2.1×. The Keccak alone took the reference build from 6.41 to 3.99
+million cycles (1.60×). Keccak is now 59% of the extension build, down from 76%, and 44% of the reference build.
+The arithmetic mod q is worth more than before: 1.33× on the whole scheme, against 1.19× with the old
+Keccak. Cycles outside Keccak are unchanged by this step apart from the lane conversions (1,235,623 in the extension build,
+against 1,291,142 before, a drop of about 55,000 cycles: the new absorb and squeeze work a lane at a time, the old one a byte at a time).
+
+**What a Keccak instruction could still win** (an estimate; no RTL was written). A unit that does one round
+in a cycle or two, with the state held in it and loaded and read through the register file (50 words in,
+up to 42 words out per block), would cost on the order of 150 to 250 cycles a permutation in all, most of it
+moving the state. For 105 permutations that is about 20,000 cycles in place of 1.75 million, and the build
+would take about 1.26 million cycles: 2.4× faster than the software Keccak here, and 4.3× faster than step 4's
+extension build. Beyond that the limit is everything else (the 1.24 million cycles of sampling, compression,
+encoding and the kernels), so Keccak would be under 2% and the next costs would be the stores of the polynomial kernels and
+the byte loops of sampling. A narrower step, instructions only for the rotation-and-xor of theta and rho, would
+gain much less over `rori` and `andn`, which already make a round about 530 instructions.

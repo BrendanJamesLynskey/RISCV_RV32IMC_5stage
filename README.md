@@ -107,8 +107,8 @@ RISCV_RV32IMC_5stage/
 │   ├── power/                        # Power from simulated activity: ML-KEM polynomial-product workload, SAIF from xsim
 │   └── bench/                        # DSP, crypto, finite-field and ML-KEM benchmarks (C), data generator, ML-KEM model, cycle report
 │       ├── run_bench.sh              # The kernel benchmarks (dsp.elf): build, run, lockstep, report
-│       ├── run_kem.sh                # The whole of ML-KEM-512 (kem_main.c), reference and Xbrvdsp builds
-│       ├── keccak.c                  # Keccak-f[1600], SHA3-256/512, SHAKE128/256 in plain C
+│       ├── run_kem.sh                # The whole of ML-KEM-512 (kem_main.c), reference and Xbrvdsp builds, three Keccak variants
+│       ├── keccak.c                  # Keccak-f[1600], SHA3-256/512, SHAKE128/256 in C: 64-bit lanes, or bit-interleaved 32-bit lanes (with Zbkb)
 │       ├── mlkem_kem.c               # FIPS 203 K-PKE and ML-KEM on either polynomial back end
 │       ├── mlkem.py, gen_kem.py      # The ML-KEM model (ACVP- and CCTV-checked) and the KEM test case
 │       └── kem_report.py             # Cycles per operation and the share in Keccak, from the marker file
@@ -340,12 +340,15 @@ implicit-rejection key for a tampered ciphertext ([doc/lattice_crypto.md](doc/la
 
 | Operation | Reference | Xbrvdsp | Speed-up | Keccak's share with Xbrvdsp |
 |---|---|---|---|---|
-| KeyGen | 1,433,125 | 1,291,067 | 1.11× | 82% |
-| Encaps | 1,536,007 | 1,313,117 | 1.17× | 78% |
-| Decaps | 1,717,035 | 1,398,671 | 1.23× | 73% |
+| KeyGen | 813,225 | 670,864 | 1.21× | 67% |
+| Encaps | 938,981 | 715,958 | 1.31× | 61% |
+| Decaps | 1,119,630 | 801,387 | 1.40× | 54% |
 
-The arithmetic mod q is no longer where the time goes: Keccak-f[1600] in plain C (64-bit lanes on a 32-bit
-core, 39,169 cycles a permutation) is three quarters of the extension build.
+These use the fastest Keccak-f[1600]: bit-interleaved 32-bit lanes with Zbkb (`rori`, `andn`, `zip`/`unzip`),
+16,707 cycles a permutation against 39,174 for 64-bit lanes in plain C (29,258 for interleaved lanes without
+Zbkb). The whole of ML-KEM-512 takes 2,989,889 cycles with Xbrvdsp, 2.14× faster than the original reference
+build (6,406,500); the arithmetic mod q alone gave 1.19× while Keccak took three quarters of the time
+([details](doc/lattice_crypto.md#step-6-a-faster-keccak)).
 
 **Multiply in MEM.** The plain-C kernels pay one mul-use bubble per multiply, because their loops use each
 product in the very next instruction and have nothing to put between. Before the multiply moved to MEM they took

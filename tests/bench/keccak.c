@@ -128,15 +128,18 @@ void rot64(uint32_t *re, uint32_t *ro, uint32_t e, uint32_t o, unsigned n)
     CHI(4);                                                             \
   } while (0)
 
-/* Two rounds per pass, the second reading what the first wrote, so the
-   result of 24 rounds lands back in w */
+/* One round per pass, reading one array and writing the other, so after 24
+   rounds the result is back in w. (Two rounds per pass was the first
+   version: 3.4 KB of straight-line code, which does not fit the 2 KB
+   I-cache, and a permutation took 51,101 cycles; one round is 1.7 KB.) */
 void keccak_f1600_bi(uint32_t w[50])
 {
   uint32_t t[50];
+  uint32_t *p = w, *q = t, *x;
   BENCH_MARK(10);
-  for (unsigned r = 0; r < 48; r += 4) {
-    ROUND(w, t, RCI + r);
-    ROUND(t, w, RCI + r + 2);
+  for (unsigned r = 0; r < 48; r += 2) {
+    ROUND(p, q, RCI + r);
+    x = p; p = q; q = x;
   }
   BENCH_MARK(11);
 }

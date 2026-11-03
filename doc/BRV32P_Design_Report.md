@@ -104,7 +104,7 @@ Both caches share the same organisation:
 | Replacement | LRU (1-bit pseudo-LRU per set) |
 | Write policy (D-cache) | Write-through, write-allocate |
 
-Cache tags include a valid bit. There is no dirty bit in the I-cache. The D-cache does not implement a dirty bit because it is write-through; every store updates SRAM.
+Cache tags include a valid bit. There is no dirty bit in the I-cache. The D-cache does not implement a dirty bit because it is write-through; every store updates SRAM. Addresses in the peripheral window (bits [31:28] = `0x2`) bypass the D-cache: each load is one bus read and each store goes straight to the write buffer, so register reads are never stale and a line fill never reads a register with side effects.
 
 **Coherence note:** There is no hardware coherence between I-cache and D-cache. Self-modifying code must explicitly flush the I-cache (write `1` to the I-cache flush CSR at address `0x7C0`).
 

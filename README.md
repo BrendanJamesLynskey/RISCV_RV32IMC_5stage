@@ -13,7 +13,7 @@ A synthesisable RV32IMC RISC-V SoC implemented in Verilog-2001. Features a class
 | **Hazards** | Full data forwarding; load-use, mul-use and csr-use stalls; flush on misprediction |
 | **Branch prediction** | 2-bit saturating BHT + Branch Target Buffer (BTB) |
 | **I-cache** | 2-way set-associative, 2 KB, 16-byte lines, read-only (filled on a miss) |
-| **D-cache** | 2-way set-associative, 2 KB, write-through |
+| **D-cache** | 2-way set-associative, 2 KB, write-through; the peripheral window is uncached |
 | **Bus** | AXI4-Lite, 2-master / 2-slave interconnect with priority arbiter |
 | **Memory** | 32 KB unified backing SRAM |
 | **Peripherals** | GPIO (with interrupts), UART (8N1 TX/RX), Timer/counter |
@@ -103,7 +103,7 @@ RISCV_RV32IMC_5stage/
 │   │   ├── lockstep.py               # Compare the commit log with Spike's (streamed)
 │   │   ├── elf2hex.py                # ELF image → $readmemh hex
 │   │   └── env/                      # Bare-metal test environment (riscv_test.h, link.ld)
-│   ├── directed/                     # Own tests: FENCE.I, misaligned traps, interrupts
+│   ├── directed/                     # Own tests: FENCE.I, misaligned traps, interrupts, uncached peripherals
 │   ├── power/                        # Power from simulated activity: ML-KEM polynomial-product workload, SAIF from xsim
 │   └── bench/                        # DSP, crypto, finite-field and ML-KEM benchmarks (C), data generator, ML-KEM model, cycle report
 │       ├── run_bench.sh              # The kernel benchmarks (dsp.elf): build, run, lockstep, report
@@ -378,8 +378,8 @@ accumulator, post-increment loads and a zero-overhead loop would remove most of 
 |---|---|---|
 | riscv-tests `rv32ui`, `rv32um`, `rv32uc` | Every RV32I, M and C instruction, with bypass and hazard cases | all pass |
 | The same `rv32ui`/`rv32um` sources assembled **with C** | Mixed 16/32-bit code: 32-bit instructions straddling words, branches sharing a word | all pass |
-| Directed (`tests/directed`) | The DSP extension (every instruction, rounding, saturation, 40-bit wrap and readback; a MAC interrupted in EX leaves the accumulator untouched; the address generators' strides, extension, readback and precise misaligned traps, and interrupted `lw.a` loops; `sadd`/`ssub` at and across both limits; `radd16`/`rsub16`/`pk16` at the extremes; bit-reversed addressing (8, 4 and 1024 points, and the wrap); hardware loops of 0 to many passes, one-instruction bodies, branches and compressed code in the body, save and restore around an inner loop, and interrupts at the loop end; the packed GF(2⁸) multiply in two fields and a polynomial with bit 7 set, `gf.cfg` straight before its use, and a `gf.cfg` behind a trapping load; arithmetic mod q, every instruction, with ML-KEM's and Falcon's q, `mq.zeta` and `mq.cfg` straight before their use, `mqmul2`'s second MEM cycle with a load miss and a dependent instruction behind it, and `mq.cfg`/`mq.zeta` behind trapping loads); Zbkb, Zbkc, Zbkx, Zknh, Zkne and Zknd, every instruction (AES with every byte select, carry-less products at the edges, permutes with out-of-range indexes) against Python and Spike, with forwarding; a multiply's or a CSR instruction's result used by the next instruction in every role (rs1, rs2, branch, store data, load address, JALR target, MAC operand, the next multiply or CSR instruction); FENCE.I on cached code, and in the cycle an I-cache fill completes; misaligned-access traps; timer interrupts (cause, and nothing lost or run twice) | all pass |
-| Lockstep with Spike | Every ISA and directed test except `timer_irq` and `dsp_irq` (Spike has no timer; both check themselves), compared instruction by instruction; tests of the DSP extension use its Spike model (`tools/spike_xbrvdsp`) | all match |
+| Directed (`tests/directed`) | The DSP extension (every instruction, rounding, saturation, 40-bit wrap and readback; a MAC interrupted in EX leaves the accumulator untouched; the address generators' strides, extension, readback and precise misaligned traps, and interrupted `lw.a` loops; `sadd`/`ssub` at and across both limits; `radd16`/`rsub16`/`pk16` at the extremes; bit-reversed addressing (8, 4 and 1024 points, and the wrap); hardware loops of 0 to many passes, one-instruction bodies, branches and compressed code in the body, save and restore around an inner loop, and interrupts at the loop end; the packed GF(2⁸) multiply in two fields and a polynomial with bit 7 set, `gf.cfg` straight before its use, and a `gf.cfg` behind a trapping load; arithmetic mod q, every instruction, with ML-KEM's and Falcon's q, `mq.zeta` and `mq.cfg` straight before their use, `mqmul2`'s second MEM cycle with a load miss and a dependent instruction behind it, and `mq.cfg`/`mq.zeta` behind trapping loads); Zbkb, Zbkc, Zbkx, Zknh, Zkne and Zknd, every instruction (AES with every byte select, carry-less products at the edges, permutes with out-of-range indexes) against Python and Spike, with forwarding; a multiply's or a CSR instruction's result used by the next instruction in every role (rs1, rs2, branch, store data, load address, JALR target, MAC operand, the next multiply or CSR instruction); FENCE.I on cached code, and in the cycle an I-cache fill completes; misaligned-access traps; timer interrupts (cause, and nothing lost or run twice); peripheral loads and stores bypass the D-cache (the timer count read twice, back to back, after a store, and in bytes and halves) | all pass |
+| Lockstep with Spike | Every ISA and directed test except `timer_irq`, `dsp_irq` and `periph_uncached` (Spike has no timer; all three check themselves), compared instruction by instruction; tests of the DSP extension use its Spike model (`tools/spike_xbrvdsp`) | all match |
 | Pipeline trace | Every ISA and directed test: the rebuilt pipeline matches the RTL's stage registers every cycle, and its retirements match the retire trace | all check |
 | SoC testbench + cocotb | Directed SoC program: GPIO, UART byte, caches, predictor training, ECALL | 30/30, 14/14 |
 | ML-KEM-512 on the core (`tests/bench/run_kem.sh`) | KeyGen, Encaps, Decaps and a rejected Decaps, reference and Xbrvdsp builds, each in lockstep with Spike and checked byte for byte against the ACVP-checked model | both match |
@@ -439,6 +439,12 @@ new directed test, with the failing run's pipeline diagram in [doc/pipeline_trac
 |---|---|---|
 | FENCE.I lost during an I-cache fill | Stale code ran after a patch, when the instruction after the fence started an uncached line | FENCE.I in EX waits out the fetch miss and acts in the cycle the filled word is delivered; the I-cache ignored `invalidate` in that state. Test `directed/fence_i_fill` |
 
+**Found while writing a QEMU model of the SoC**, by reading the D-cache against the peripheral register maps:
+
+| Bug | Symptom | Root cause |
+|---|---|---|
+| Peripheral registers were cached | Reading the timer count twice returned the same value; a line fill also read the neighbouring registers, and over the UART that cleared `rx_valid` | The D-cache treated the peripheral window like SRAM. Now addresses with bits [31:28] = `0x2` bypass it: a load is one word read on the bus, a store goes to the write buffer, and neither allocates a line. A finished uncached access is also not repeated while the instruction is held in MEM by a fetch stall (new core output `dmem_hold`). Test `directed/periph_uncached` fails at case 2 on the old cache |
+
 The test harness had bugs of its own, also fixed:
 - image paths over 128 characters were truncated, and the run continued on an all-NOP memory;
 - the final `tohost` store was missing from the trace.
@@ -473,7 +479,7 @@ that turns out not to be a branch, flushes the two younger instructions (2-cycle
 
 ### Cache coherence
 
-The D-cache uses a **write-through, write-allocate** policy (a store miss fills the line, then writes it), so memory is always up to date. FENCE.I invalidates
+The D-cache uses a **write-through, write-allocate** policy (a store miss fills the line, then writes it), so memory is always up to date. The peripheral window (bits [31:28] = `0x2`) is not cached at all. FENCE.I invalidates
 the I-cache and refetches the next instruction, which makes code written by stores visible.
 
 ### AXI4-Lite interconnect

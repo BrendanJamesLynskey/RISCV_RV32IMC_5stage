@@ -22,7 +22,7 @@ module brv32p_soc #(
   wire        core_imem_rd, core_imem_ready;
 
   wire [31:0] core_dmem_addr, core_dmem_wdata, core_dmem_rdata;
-  wire        core_dmem_rd, core_dmem_wr, core_dmem_ready;
+  wire        core_dmem_rd, core_dmem_wr, core_dmem_ready, core_dmem_hold;
   wire [1:0]  core_dmem_width;
   wire        core_dmem_sign_ext;
 
@@ -77,6 +77,7 @@ module brv32p_soc #(
     .dmem_wdata    (core_dmem_wdata),
     .dmem_rdata    (core_dmem_rdata),
     .dmem_ready    (core_dmem_ready),
+    .dmem_hold     (core_dmem_hold),
     .ext_irq       (gpio_irq | uart_irq),
     .timer_irq     (timer_irq),
     .icache_invalidate (icache_invalidate)
@@ -113,6 +114,7 @@ module brv32p_soc #(
     .wdata     (core_dmem_wdata),
     .rdata     (core_dmem_rdata),
     .ready     (core_dmem_ready),
+    .hold      (core_dmem_hold),
     .mem_addr  (dc_mem_addr),
     .mem_rd    (dc_mem_rd),
     .mem_wr    (dc_mem_wr),

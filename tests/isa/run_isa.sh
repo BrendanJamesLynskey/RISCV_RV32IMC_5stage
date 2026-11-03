@@ -44,7 +44,7 @@ declare -A SRC=( [rv32ui]="$RISCV_TESTS/isa/rv32ui" [rv32um]="$RISCV_TESTS/isa/r
 SUITES=(rv32ui rv32um rv32uc rv32ui-c rv32um-c directed)
 
 # Tests that use the SoC's own peripherals, which Spike does not model
-NO_LOCKSTEP=" directed/timer_irq directed/dsp_irq "
+NO_LOCKSTEP=" directed/timer_irq directed/dsp_irq directed/periph_uncached "
 
 # Upstream tests that do not apply to this core, skipped in a full run (name a
 # test explicitly to run it anyway). In each case Spike, configured like the

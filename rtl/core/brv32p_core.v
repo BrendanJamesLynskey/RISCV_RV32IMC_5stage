@@ -23,6 +23,7 @@ module brv32p_core #(
   output wire [31:0] dmem_wdata,
   input  wire [31:0] dmem_rdata,
   input  wire        dmem_ready,
+  output wire        dmem_hold,      // MEM is held by something other than the D-cache
 
   // Interrupts
   input  wire        ext_irq,
@@ -61,6 +62,9 @@ module brv32p_core #(
   assign imem_stall = imem_rd & ~imem_ready;
   wire mq_stall;      // mqmul2's first cycle in MEM (mq_unit.v)
   assign mem_stall  = dmem_stall | imem_stall | mq_stall;
+  // The D-cache needs this for uncached (peripheral) accesses: a finished
+  // access must not be repeated while the instruction is still held in MEM
+  assign dmem_hold  = imem_stall | mq_stall;
 
   // ════════════════════════════════════════════════════════════════════
   // IF — Instruction Fetch

@@ -276,10 +276,55 @@ these two programs on this design, not a measurement. Two things to read with th
 
 - `u_mq` is not idle in the reference run (20 mW) even though no instruction uses it. Its multipliers take
   their operands straight from EX's operand buses, which change on every instruction; only the registers
-  after them load on an mq instruction. Operand isolation (gating the multiplier inputs to zero unless an
-  mq instruction is in EX) would remove most of that, at the cost of a mux on the operand path.
+  after them load on an mq instruction. Step 5b gates them; the estimate shows less of the effect than
+  expected, for the reason given there.
 - A SAIF from a simulation of the routed netlist (`write_verilog -mode funcsim`) would match nearly every
   net. It is far slower to simulate; the RTL SAIF is what this step used.
+
+## Step 5b: operand isolation
+
+`u_mq` is instantiated in `brv32p_core.v` with its EX operands (`rs1_fwd`, `rs2_fwd`) and `funct7` passed
+through an AND with the EX-stage "is mq" decode bit (`mq_ex`, custom-0 funct3 110): a plain AND per bit
+(71 gates), in front of the multipliers, the `subq` of `gsmul2` and the `mq.cfg`/`mq.zeta` loads, which are
+the only uses of the operands. Unless an mq instruction is in EX, the unit sees zeros, so its products,
+quotients and adders hold still. The alternative, enable-loaded operand registers, would have added 71
+flip-flops and a cycle; the AND sits after the forwarding mux, and `mq_ex` is a decode of `raw_ex`, which is
+ready early. Results are unchanged: the 112 ISA tests (in lockstep with Spike), the ML-KEM jobs, the SoC
+testbenches and lint all pass, and the two programs below run the same cycle counts as before
+(399,363 and 85,536).
+
+The flow is Step 5's. The "before" column is a fresh run of the same flow on main (bc75bf8), not the
+table above, because the placement, and with it the estimate, moves between builds (the 7% of nets
+Vivado can match to the RTL SAIF is a different 7%). Same 10 ns constraint, Vivado 2025.2:
+
+| | Before, vectorless | After | Before, reference C | After | Before, kernels | After |
+|---|---|---|---|---|---|---|
+| Dynamic power | 131 mW | 100 mW | 230 mW | 191 mW | 135 mW | 113 mW |
+| of which the core / `u_mq` | 114 / 16 | 84 / 7 | 214 / 19 | 179 / 11 | 121 / 17 | 101 / 9 |
+| Static power | 85 mW | 85 mW | 85 mW | 85 mW | 85 mW | 85 mW |
+| Energy per product, dynamic (94,241 / 15,443 cycles) | | | 217 µJ | 180 µJ | 20.8 µJ | 17.4 µJ |
+| Energy per product, with static | | | 296 µJ | 260 µJ | 33.8 µJ | 30.6 µJ |
+
+| Cost | Before | After |
+|---|---|---|
+| LUTs | 11,872 | 11,832 |
+| Registers | 7,950 | 7,975 |
+| DSP48 | 16 | 16 |
+| `u_mq` LUTs / registers | 748 / 136 | 811 / 161 |
+| WNS at 10 ns (Fmax) | -5.876 ns (63.0 MHz) | -5.966 ns (62.6 MHz) |
+
+Isolation costs nothing measurable: the unit's own LUTs rose by 63 and the whole design's fell by 40 (the
+two are within the changes between builds), and the worst path (the accumulator readback, as before) is
+0.09 ns slower, 0.6% of Fmax, which is in the range placement moves it by.
+
+**What it shows, and what it does not.** `u_mq` falls in all three estimates (vectorless 16 to 7 mW,
+reference C 19 to 11 mW, kernels 17 to 9 mW), but not to about zero, and the rest of the fall, in the core,
+is not isolation: it is the estimate moving between builds. Vivado propagates activity from the 7% of nets
+it matched to the RTL SAIF through the rest of the logic, and it propagates through an AND gate with the
+gate's other input switching at its own rate, not at its true value of "always 0 in this program". It
+cannot see that `mq_ex` is never set in the reference run. So this flow understates what isolation does,
+and cannot confirm it. A SAIF that names the nets after place and route, with the gates in it (Step 5c),
+can.
 
 ## Step 6: a faster Keccak
 

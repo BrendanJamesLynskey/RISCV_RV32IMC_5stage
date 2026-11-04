@@ -279,8 +279,10 @@ these two programs on this design, not a measurement. Two things to read with th
   after them load on an mq instruction. Step 5b gates them; the estimate shows less of the effect than
   expected, for the reason given there.
 - A SAIF from a simulation of the routed netlist (`write_verilog -mode funcsim`) matches many more nets
-  (59%, High confidence), and agrees with this table to within 8%; see Step 5c. It is far slower to
-  simulate; the RTL SAIF is what this step used.
+  (59%, High confidence), and agrees with the RTL SAIF read into the same design to within 8%; see Step 5c.
+  The absolute figures in the table above do not reproduce from build to build (Step 5b's fresh run gives
+  230 mW for the reference C), so compare programs within one table, not across tables. The netlist SAIF is
+  far slower to simulate; the RTL SAIF is what this step used.
 
 ## Step 5b: operand isolation
 

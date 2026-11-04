@@ -13,6 +13,16 @@
 void mlkem_polymul(int16_t *c, int16_t *a, int16_t *b);
 void mlkem_polymul_x(uint16_t *c, uint16_t *a, uint16_t *b);
 
+#ifdef NETLIST
+/* A routed netlist has only the SoC's ports (tb_netlist.v), not the testbench's
+   view of the core: report on the GPIO pins, 1 pass and 2 fail */
+static void netlist_report(uint32_t v)
+{
+  *(volatile uint32_t *)0x20000008 = 0xFFFFFFFFu;   /* direction: all outputs */
+  *(volatile uint32_t *)0x20000000 = v;
+}
+#endif
+
 static uint16_t pa[256] __attribute__((aligned(4)));
 static uint16_t pb[256] __attribute__((aligned(4)));
 static uint16_t pc[256] __attribute__((aligned(4)));
@@ -35,7 +45,15 @@ int main(void)
   /* the reference result is correct mod q, not reduced */
   for (int i = 0; i < 256; i++) {
     int32_t d = ((int32_t)(int16_t)pc[i] - (int32_t)mlkem_mul_expect[i]) % MLKEM_Q;
-    if (d) return 2;
+    if (d) {
+#ifdef NETLIST
+      netlist_report(2);
+#endif
+      return 2;
+    }
   }
+#ifdef NETLIST
+  netlist_report(1);
+#endif
   return 0;
 }

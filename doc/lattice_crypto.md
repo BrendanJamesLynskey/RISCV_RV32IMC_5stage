@@ -278,8 +278,9 @@ these two programs on this design, not a measurement. Two things to read with th
   their operands straight from EX's operand buses, which change on every instruction; only the registers
   after them load on an mq instruction. Step 5b gates them; the estimate shows less of the effect than
   expected, for the reason given there.
-- A SAIF from a simulation of the routed netlist (`write_verilog -mode funcsim`) would match nearly every
-  net. It is far slower to simulate; the RTL SAIF is what this step used.
+- A SAIF from a simulation of the routed netlist (`write_verilog -mode funcsim`) matches many more nets
+  (59%, High confidence), and agrees with this table to within 8%; see Step 5c. It is far slower to
+  simulate; the RTL SAIF is what this step used.
 
 ## Step 5b: operand isolation
 
@@ -325,6 +326,50 @@ gate's other input switching at its own rate, not at its true value of "always 0
 cannot see that `mq_ex` is never set in the reference run. So this flow understates what isolation does,
 and cannot confirm it. A SAIF that names the nets after place and route, with the gates in it (Step 5c),
 can.
+
+## Step 5c: power from the routed netlist
+
+`tests/power/run_saif_netlist.sh` repeats Step 5 on the placed-and-routed design itself. For each program
+(`saif_polymul.c` built with `-DNETLIST`, which reports on the GPIO pins, since a netlist has only the SoC's
+ports; the same four products) Vivado implements the isolated SoC with the program as the SRAM's initial image
+(`scripts/vivado_netlist.tcl`: 16,384 words and reset vector 0x8000_0000, as the benchmarks are built),
+writes it with `write_verilog -mode funcsim`, xsim simulates that under `tests/power/tb_netlist.v`, and
+Vivado reads the SAIF back into the same routed design (`scripts/vivado_netlist_power.tcl`). The simulation
+is **plain funcsim: zero delay, no SDF**, so it counts the logic transitions of the routed netlist but not
+glitches from unequal path delays. It passes (the GPIO result is 1) and runs the same program in 399,032 and
+85,994 cycles (399,363 and 85,536 in the RTL run: the testbench stops on the GPIO write, not the `tohost` store).
+
+| | Reference C, RTL SAIF | Reference C, netlist SAIF | Kernels, RTL SAIF | Kernels, netlist SAIF |
+|---|---|---|---|---|
+| Nets matched | 7% (1,705 of 24,084) | **59% (14,219 of 24,084)** | 7% | **59%** |
+| Confidence level | Medium | **High** | Medium | **High** |
+| Dynamic power | 194 mW | 209 mW | 115 mW | 118 mW |
+| of which the core / `u_mq` | 181 / 11 | 187 / 7 | 102 / 9 | 96 / 7 |
+| Static power | 85 mW | 85 mW | 85 mW | 85 mW |
+| Energy per product, dynamic (94,241 / 15,443 cycles) | 183 µJ | 197 µJ | 17.8 µJ | 18.2 µJ |
+| Energy per product, with static | 263 µJ | 278 µJ | 30.9 µJ | 31.3 µJ |
+
+(The RTL columns are Step 5's SAIFs read into this 16,384-word design, so the two SAIFs are compared on one
+set of nets. The vectorless figure on this design is 72 mW dynamic. Resources: 11,860 LUTs, 7,947 registers,
+16 DSP, 16 RAMB36, WNS -5.423 ns; the 64 KB SRAM doubles the block RAM against the 32 KB of the earlier
+tables, and placement moves the rest.)
+
+**What it shows.** The netlist SAIF gives Vivado's report High confidence and matches 59% of nets, not near
+100%: the rest are nets inside primitives (carry chains, the DSP and block RAM internals, constants) that
+the funcsim netlist simulates but does not expose under the names the report uses. The figures agree with
+the RTL SAIF's to within 8% for reference C and 3% for the kernels, and the kernels' energy per product is
+10.8 times less in dynamic energy and 8.9 times less with static, against 10.3 and 8.5 from the RTL SAIF. So
+Step 5's conclusion holds on a measured-by-net footing, and its 7% matching did little harm.
+`u_mq` is 7 mW in both runs, and the kernel run, which uses it throughout, shows no more than the
+reference run, which does not: with isolation, activity in the unit is no longer what sets its power. The
+7 mW that remains is, we infer, the clocks to its 129 registers and 9 DSP slices, which nothing gates.
+A run of the design before Step 5b was not made from the netlist, so this does not show the saving from
+isolation directly.
+
+**Cost.** Wall time on the workstation: implementation and netlist export about 10 minutes a program, xelab
+1 minute, and the simulation with SAIF logging 58 minutes for the reference run (399,000 cycles, about 115
+cycles a second) and 9 for the kernel run; 90 minutes for the two. Four products per program was well
+within the 2-hour budget, so none was cut to one.
 
 ## Step 6: a faster Keccak
 

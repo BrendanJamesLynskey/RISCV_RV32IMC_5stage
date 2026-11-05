@@ -614,14 +614,21 @@ module brv32p_core #(
                 raw_mem[6:0] == OP_CUSTOM0 && raw_mem[14:12] == 3'b110;
   wire [31:0] mq_result;
 
+  // Operand isolation: the unit's multipliers and adders see zeros unless an
+  // mq instruction is in EX, so code that never uses it does not toggle them
+  // (the operand buses change on every instruction).
+  wire [6:0]  mq_f7_ex = mq_ex ? raw_ex[31:25] : 7'd0;
+  wire [31:0] mq_a_ex  = mq_ex ? rs1_fwd : 32'd0;
+  wire [31:0] mq_b_ex  = mq_ex ? rs2_fwd : 32'd0;
+
   mq_unit u_mq (
     .clk        (clk),
     .rst_n      (rst_n),
     .update     (mq_ex && !mem_stall && !stall_ex && !flush_mem),
     .load       (mq_wr_ex && !mem_stall),
-    .funct7_ex  (raw_ex[31:25]),
-    .a_ex       (rs1_fwd),
-    .b_ex       (rs2_fwd),
+    .funct7_ex  (mq_f7_ex),
+    .a_ex       (mq_a_ex),
+    .b_ex       (mq_b_ex),
     .in_mem     (mq_mem),
     .hold       (mem_stall),
     .funct7_mem (raw_mem[31:25]),

@@ -11,6 +11,7 @@
 # Pipeline trace: each test also writes a per-cycle pipeline trace (.pipe),
 #        and scripts/pipeview.py checks it against the retire trace; a
 #        mismatch fails the test. PIPE=0 skips.
+# IVFLAGS adds flags to the iverilog command (e.g. -DBP_KIND_DEFAULT=3: another branch predictor).
 # Writes build output to tests/isa/build/ and a summary to build/results.txt.
 # Exits non-zero if any test fails.
 set -euo pipefail
@@ -78,7 +79,7 @@ if [ ${#tests[@]} -eq 0 ]; then
 fi
 
 # Compile the SoC and ISA testbench once
-iverilog -g2005 -o "$B/tb_isa.vvp" -I "$ROOT/rtl/pkg" -I "$ROOT/rtl/core" \
+iverilog -g2005 ${IVFLAGS:-} -o "$B/tb_isa.vvp" -I "$ROOT/rtl/pkg" -I "$ROOT/rtl/core" \
   "$ROOT"/rtl/core/*.v "$ROOT"/rtl/cache/*.v \
   "$ROOT/rtl/bus/axi_interconnect.v" "$ROOT/rtl/bus/axi_sram.v" "$ROOT/rtl/bus/axi_periph_bridge.v" \
   "$ROOT"/rtl/periph/*.v "$ROOT/rtl/brv32p_soc.v" "$HERE/tb_isa.v"

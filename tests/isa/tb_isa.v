@@ -14,6 +14,14 @@
 //                      ("slti zero, zero, n", tests/bench/bench.h) retires:
 //                      cycles per benchmark without the pipeline trace,
 //                      which is too large for a multi-million-cycle run
+//   +stats=<file>      optional: at each BENCH_MARK(n) write the running
+//                      totals "n cycles retired branches mp_cond mp_jump
+//                      mp_other" (and a last line "end ..." at the finish):
+//                      branches resolved in EX (conditional branches and
+//                      hardware-loop ends, the ones the predictor learns
+//                      from), and mispredicts split into those, jumps
+//                      (JAL/JALR, which the predictor never learns) and
+//                      taken predictions for something that is not a branch
 // The test stores 1 to tohost on success, or (testnum << 1) | 1 on failure;
 // the store is seen on the core's retire trace. Prints one line:
 //   RESULT PASS|FAIL|TIMEOUT <cycles> cycles <n> retired [failing test case]
@@ -47,9 +55,10 @@ module tb_isa;
 
   `define CORE dut.u_core
 
-  reg [8*512-1:0] hex_file, trace_file, pipe_file, marks_file;   // paths up to 512 characters
+  reg [8*512-1:0] hex_file, trace_file, pipe_file, marks_file, stats_file;   // paths up to 512 characters
   reg [31:0]   tohost;
-  integer      timeout, cycles, retired, trace_fd, hex_fd, pipe_fd, marks_fd;
+  integer      timeout, cycles, retired, trace_fd, hex_fd, pipe_fd, marks_fd, stats_fd;
+  integer      st_br, st_mp_c, st_mp_j, st_mp_o;
 
   initial begin
     if (!$value$plusargs("hex=%s", hex_file)) begin
@@ -65,6 +74,9 @@ module tb_isa;
     if ($value$plusargs("trace=%s", trace_file)) trace_fd = $fopen(trace_file, "w");
     marks_fd = 0;
     if ($value$plusargs("marks=%s", marks_file)) marks_fd = $fopen(marks_file, "w");
+    stats_fd = 0;
+    st_br = 0; st_mp_c = 0; st_mp_j = 0; st_mp_o = 0;
+    if ($value$plusargs("stats=%s", stats_file)) stats_fd = $fopen(stats_file, "w");
     pipe_fd = 0;
     if ($value$plusargs("pipe=%s", pipe_file)) begin
       pipe_fd = $fopen(pipe_file, "w");
@@ -149,12 +161,21 @@ module tb_isa;
 
   always @(posedge clk) if (rst_n) begin
     cycles = cycles + 1;
+    if (`CORE.bp_update_en) st_br = st_br + 1;
+    if (`CORE.branch_mispredict_ex) begin
+      if (`CORE.bp_update_en)              st_mp_c = st_mp_c + 1;
+      else if (`CORE.is_branch_or_jump)    st_mp_j = st_mp_j + 1;
+      else                                 st_mp_o = st_mp_o + 1;
+    end
     if (`CORE.retire_valid) begin
       retired = retired + 1;
       if (trace_fd != 0) log_retire;
       // BENCH_MARK(n): slti zero, zero, n (OP-IMM, funct3 010, rd and rs1 zero)
       if (marks_fd != 0 && `CORE.retire_insn[19:0] == 20'h02013)
         $fwrite(marks_fd, "%0d %0d\n", `CORE.retire_insn[31:20], cycles);
+      if (stats_fd != 0 && `CORE.retire_insn[19:0] == 20'h02013)
+        $fwrite(stats_fd, "%0d %0d %0d %0d %0d %0d %0d\n", `CORE.retire_insn[31:20], cycles, retired,
+                st_br, st_mp_c, st_mp_j, st_mp_o);
       if (`CORE.retire_mem_we && `CORE.retire_mem_addr == tohost) begin
         if (`CORE.retire_mem_wdata == 32'd1)
           $display("RESULT PASS %0d cycles %0d retired", cycles, retired);
@@ -167,6 +188,10 @@ module tb_isa;
         if (trace_fd != 0) $fclose(trace_fd);
         if (pipe_fd != 0) $fclose(pipe_fd);
         if (marks_fd != 0) $fclose(marks_fd);
+        if (stats_fd != 0) begin
+          $fwrite(stats_fd, "end %0d %0d %0d %0d %0d %0d\n", cycles, retired, st_br, st_mp_c, st_mp_j, st_mp_o);
+          $fclose(stats_fd);
+        end
         $finish;
       end
     end

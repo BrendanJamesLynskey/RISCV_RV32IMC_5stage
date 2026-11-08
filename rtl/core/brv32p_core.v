@@ -2,8 +2,13 @@
 // brv32p_core.v — 5-Stage Pipelined RV32IMC CPU Core
 // ============================================================================
 
+`include "brv32p_bp.vh"
+
 module brv32p_core #(
-  parameter [31:0] RESET_PC = 32'h0000_0000
+  parameter [31:0] RESET_PC = 32'h0000_0000,
+  parameter        BP_KIND     = `BP_KIND_DEFAULT,   // branch predictor: see brv32p_bp.vh
+  parameter        BP_BHT_ENTRIES = `BP_BHT_DEFAULT,
+  parameter        BP_GH_BITS  = `BP_GH_DEFAULT
 ) (
   input  wire        clk,
   input  wire        rst_n,
@@ -140,7 +145,11 @@ module brv32p_core #(
   wire [31:0] bp_update_pc, bp_update_target;
   wire        bp_update_taken;
 
-  branch_predictor u_bp (
+  branch_predictor #(
+    .BP_KIND     (BP_KIND),
+    .BHT_ENTRIES (BP_BHT_ENTRIES),
+    .GH_BITS     (BP_GH_BITS)
+  ) u_bp (
     .clk         (clk),
     .rst_n       (rst_n),
     .pc          (pc_if),

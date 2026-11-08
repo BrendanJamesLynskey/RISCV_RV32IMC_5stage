@@ -107,6 +107,10 @@ RISCV_RV32IMC_5stage/
 │   ├── power/                        # Power from simulated activity: ML-KEM polynomial-product workload, SAIF from xsim
 │   └── bench/                        # DSP, crypto, finite-field and ML-KEM benchmarks (C), data generator, ML-KEM model, cycle report
 │       ├── run_bench.sh              # The kernel benchmarks (dsp.elf): build, run, lockstep, report
+│       ├── cpi_breakdown.py          # CPI by cause from a pipeline trace (H&P App. C form); sums checked
+│       ├── cpi_micro.S, run_cpi_micro.sh  # Directed tests: load-use costs 1 bubble, a mispredict 2
+│       ├── run_kem_cpi.sh            # The same for ML-KEM-512, through a named pipe
+│       ├── sim.sh                    # Build/run the testbench with Icarus or (SIM=verilator) Verilator
 │       ├── run_kem.sh                # The whole of ML-KEM-512 (kem_main.c), reference and Xbrvdsp builds, three Keccak variants
 │       ├── keccak.c                  # Keccak-f[1600], SHA3-256/512, SHAKE128/256 in C: 64-bit lanes, or bit-interleaved 32-bit lanes (with Zbkb)
 │       ├── mlkem_kem.c               # FIPS 203 K-PKE and ML-KEM on either polynomial back end
@@ -121,6 +125,7 @@ RISCV_RV32IMC_5stage/
 ├── doc/
 │   ├── BRV32P_Design_Report.md       # Detailed micro-architecture write-up
 │   ├── pipeline_trace.md             # The pipeline trace, its checking, and real diagrams
+│   ├── cpi_breakdown.md              # Where the cycles go: CPI by cause for the benchmarks and ML-KEM-512
 │   ├── dsp_extension.md              # Xbrvdsp: encodings, semantics, micro-architecture
 │   ├── crypto_extensions.md          # Zbkb/c/x, Zknh, Zkne, Zknd: implementation, tests, SHA-256, AES, CRC-32
 │   ├── finite_fields.md              # Finite fields: CRCs, LFSRs, gfmul4, Reed–Solomon
@@ -224,7 +229,8 @@ scripts/pipeview.py diagram tests/isa/build/rv32ui-lw.pipe --dis tests/isa/build
 ```
 
 See [doc/pipeline_trace.md](doc/pipeline_trace.md) for the format, the checking method, and real diagrams of
-load-use, mispredicts, MUL/DIV, an interrupt and cache misses.
+load-use, mispredicts, MUL/DIV, an interrupt and cache misses. [doc/cpi_breakdown.md](doc/cpi_breakdown.md)
+charges every lost cycle of the benchmarks to one cause (CPI = 1 + stalls per instruction, per cause).
 
 ### Lint
 

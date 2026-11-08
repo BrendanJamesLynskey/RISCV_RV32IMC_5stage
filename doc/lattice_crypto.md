@@ -365,8 +365,26 @@ Step 5's conclusion holds on a measured-by-net footing, and its 7% matching did 
 `u_mq` is 7 mW in both runs, and the kernel run, which uses it throughout, shows no more than the
 reference run, which does not: with isolation, activity in the unit is no longer what sets its power. The
 7 mW that remains is, we infer, the clocks to its 129 registers and 9 DSP slices, which nothing gates.
-A run of the design before Step 5b was not made from the netlist, so this does not show the saving from
-isolation directly.
+
+**The saving from isolation, from the netlist.** The same flow was run on the design without Step 5b
+(main before it, `brv32p_core.v` at bc75bf8; everything else as above), for the reference C, the program
+that never uses the unit:
+
+| Reference C, netlist SAIF | Without isolation | With isolation (Step 5b) |
+|---|---|---|
+| Nets matched, confidence | 60% (14,457 of 24,001), High | 59% (14,219 of 24,084), High |
+| Dynamic power | 219 mW | 209 mW |
+| of which the core / `u_mq` | 197 / 10 mW | 187 / 7 mW |
+| Energy per product, dynamic | 206 µJ | 197 µJ |
+| Energy per product, with static | 287 µJ | 278 µJ |
+| Cycles (to the GPIO report), WNS | 399,032, -5.771 ns | 399,032, -5.423 ns |
+
+Isolation takes `u_mq` from 10 to 7 mW in code that does not use it. That is 3 mW, about a third of the unit, and
+not the ~20 mW that Step 5's RTL SAIF suggested: most of that figure came from the 7% net matching, which
+gives the unit's internal nets activity propagated from its switching operand buses. The 10 mW fall in the
+whole design is within what placement moves between two builds (Step 5b), so only the unit's own 3 mW is
+put down to isolation. The 7 mW left is, we infer, the unit's clocked registers and DSP slices.
+
 
 **Cost.** Wall time on the workstation: implementation and netlist export about 10 minutes a program, xelab
 1 minute, and the simulation with SAIF logging 58 minutes for the reference run (399,000 cycles, about 115

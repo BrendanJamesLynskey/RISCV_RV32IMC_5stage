@@ -160,7 +160,7 @@ gshare, table size and history length:
 
 ## Cost: LUTs, flip-flops, timing
 
-Not yet measured: Vivado out-of-context place and route (`scripts/vivado_ooc.tcl`, now taking `VERILOG_DEFINES` and `OUT`) is queued behind another session's implementation run and this section will be filled in when it finishes.
+Not yet measured: Vivado out-of-context place and route (`scripts/vivado_ooc.tcl`, which now takes `VERILOG_DEFINES` and `OUT`) is queued behind another session's implementation run; this section is filled in when it finishes.
 
 
 ## Reproducing

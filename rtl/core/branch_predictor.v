@@ -85,30 +85,33 @@ module branch_predictor #(
   // would carry down the pipeline with the branch.
   localparam GHW = (GH_BITS < 1) ? 1 : (GH_BITS > BHT_IDX_W ? BHT_IDX_W : GH_BITS);
 
-  reg  [GHW-1:0] ghr;
-  wire [BHT_IDX_W-1:0] gh_ext = (GH_BITS == 0) ? {BHT_IDX_W{1'b0}} : ghr;
-  wire [BHT_IDX_W-1:0] g_pred_idx = pred_idx ^ gh_ext;
-
-  reg [1:0] gcnt [0:BHT_ENTRIES-1];
-  wire      g_taken = gcnt[g_pred_idx][1];
-
-  reg [1:0] cho [0:BHT_ENTRIES-1];          // chooser: MSB set = trust gshare
-  wire      cho_global = cho[pred_idx][1];
-
-  // what was predicted at each fetch address (indexed like the BTB)
-  reg [GHW-1:0] hs_hist [0:BTB_ENTRIES-1];
-  reg           hs_loc  [0:BTB_ENTRIES-1];
-  reg           hs_glb  [0:BTB_ENTRIES-1];
-  wire [BTB_IDX_W-1:0] hs_pred_idx = pc[BTB_IDX_W:1];
-  wire [BTB_IDX_W-1:0] hs_upd_idx  = update_pc[BTB_IDX_W:1];
-  wire [GHW-1:0]       hs_hist_upd = hs_hist[hs_upd_idx];
-  wire [BHT_IDX_W-1:0] hh_ext      = (GH_BITS == 0) ? {BHT_IDX_W{1'b0}} : hs_hist_upd;
-  wire [BHT_IDX_W-1:0] g_upd_idx   = upd_idx ^ hh_ext;
-  wire                 upd_loc     = hs_loc[hs_upd_idx];
-  wire                 upd_glb     = hs_glb[hs_upd_idx];
+  wire g_taken;                         // gshare's prediction
+  wire cho_global;                      // the chooser trusts gshare (kind 4)
 
   generate
     if (BP_KIND >= 3) begin : g_gshare
+      reg  [GHW-1:0] ghr;
+      /* verilator lint_off WIDTHEXPAND */
+      wire [GHW-1:0] taken_bit = update_taken;     // zero-extended: GHW may be 1
+      /* verilator lint_on WIDTHEXPAND */
+      wire [BHT_IDX_W-1:0] gh_ext = (GH_BITS == 0) ? {BHT_IDX_W{1'b0}} : ghr;
+      wire [BHT_IDX_W-1:0] g_pred_idx = pred_idx ^ gh_ext;
+
+      reg [1:0] gcnt [0:BHT_ENTRIES-1];
+      assign g_taken = gcnt[g_pred_idx][1];
+
+      // what was predicted at each fetch address (indexed like the BTB)
+      reg [GHW-1:0] hs_hist [0:BTB_ENTRIES-1];
+      reg           hs_loc  [0:BTB_ENTRIES-1];
+      reg           hs_glb  [0:BTB_ENTRIES-1];
+      wire [BTB_IDX_W-1:0] hs_pred_idx = pc[BTB_IDX_W:1];
+      wire [BTB_IDX_W-1:0] hs_upd_idx  = update_pc[BTB_IDX_W:1];
+      wire [GHW-1:0]       hs_hist_upd = hs_hist[hs_upd_idx];
+      wire [BHT_IDX_W-1:0] hh_ext      = (GH_BITS == 0) ? {BHT_IDX_W{1'b0}} : hs_hist_upd;
+      wire [BHT_IDX_W-1:0] g_upd_idx   = upd_idx ^ hh_ext;
+      wire                 upd_loc     = hs_loc[hs_upd_idx];
+      wire                 upd_glb     = hs_glb[hs_upd_idx];
+
       always @(posedge clk) begin
         hs_hist[hs_pred_idx] <= gh_ext[GHW-1:0];
         hs_loc[hs_pred_idx]  <= bht_taken;
@@ -118,7 +121,7 @@ module branch_predictor #(
         if (!rst_n)
           ghr <= {GHW{1'b0}};
         else if (update_en)
-          ghr <= {ghr, update_taken};
+          ghr <= (ghr << 1) | taken_bit;
       end
       for (g = 0; g < BHT_ENTRIES; g = g + 1) begin : g_gcnt
         always @(posedge clk or negedge rst_n) begin
@@ -132,35 +135,46 @@ module branch_predictor #(
           end
         end
       end
-    end
-    if (BP_KIND == 4) begin : g_tourn
-      // The chooser moves toward whichever half was right, when they differed
-      for (g = 0; g < BHT_ENTRIES; g = g + 1) begin : g_cho
-        always @(posedge clk or negedge rst_n) begin
-          if (!rst_n)
-            cho[g] <= 2'b01;                         // weakly local
-          else if (update_en && upd_idx == g && upd_loc != upd_glb) begin
-            if (upd_glb == update_taken && cho[g] != 2'b11)
-              cho[g] <= cho[g] + 1'b1;
-            else if (upd_glb != update_taken && cho[g] != 2'b00)
-              cho[g] <= cho[g] - 1'b1;
+
+      if (BP_KIND == 4) begin : g_tourn
+        // The chooser moves toward whichever half was right, when they differed
+        reg [1:0] cho [0:BHT_ENTRIES-1];          // MSB set = trust gshare
+        assign cho_global = cho[pred_idx][1];
+        for (g = 0; g < BHT_ENTRIES; g = g + 1) begin : g_cho
+          always @(posedge clk or negedge rst_n) begin
+            if (!rst_n)
+              cho[g] <= 2'b01;                         // weakly local
+            else if (update_en && upd_idx == g && upd_loc != upd_glb) begin
+              if (upd_glb == update_taken && cho[g] != 2'b11)
+                cho[g] <= cho[g] + 1'b1;
+              else if (upd_glb != update_taken && cho[g] != 2'b00)
+                cho[g] <= cho[g] - 1'b1;
+            end
           end
         end
+      end else begin : g_notourn
+        assign cho_global = 1'b0;
       end
+    end else begin : g_nogshare
+      assign g_taken    = 1'b0;
+      assign cho_global = 1'b0;
     end
   endgenerate
 
   // ── One bit per entry (kind 1) ───────────────────────────────────────
-  reg [BHT_ENTRIES-1:0] bht1;
-  wire bht1_taken = bht1[pred_idx];
+  wire bht1_taken;
   generate
     if (BP_KIND == 1) begin : g_bht1
+      reg [BHT_ENTRIES-1:0] bht1;
+      assign bht1_taken = bht1[pred_idx];
       always @(posedge clk or negedge rst_n) begin
         if (!rst_n)
           bht1 <= {BHT_ENTRIES{1'b0}};
         else if (update_en)
           bht1[upd_idx] <= update_taken;
       end
+    end else begin : g_nobht1
+      assign bht1_taken = 1'b0;
     end
   endgenerate
 

@@ -3,7 +3,7 @@
 # them in lockstep with Spike, and report cycles per kernel.
 #
 # Usage: tests/bench/run_bench.sh
-# Needs: riscv64-unknown-elf-gcc, iverilog; Spike ($SPIKE or on the PATH) and
+# Needs: riscv64-unknown-elf-gcc, iverilog (or SIM=verilator); Spike ($SPIKE or on the PATH) and
 #        its model of the DSP extension ($XBRVDSP_LIB, built by
 #        tools/spike_xbrvdsp/build.sh) for the lockstep check (LOCKSTEP=0
 #        skips it).
@@ -37,11 +37,9 @@ python3 "$ROOT/tests/isa/elf2hex.py" "$B/dsp.bin" "$B/dsp.hex"
 "${CROSS}objdump" -d "$B/dsp.elf" > "$B/dsp.dis"
 tohost=$("${CROSS}nm" "$B/dsp.elf" | awk '$3 == "tohost" { print $1 }')
 
-iverilog -g2005 -DTB_MEM_DEPTH=16384 -o "$B/tb_isa.vvp" -I "$ROOT/rtl/pkg" -I "$ROOT/rtl/core" \
-  "$ROOT"/rtl/core/*.v "$ROOT"/rtl/cache/*.v \
-  "$ROOT/rtl/bus/axi_interconnect.v" "$ROOT/rtl/bus/axi_sram.v" "$ROOT/rtl/bus/axi_periph_bridge.v" \
-  "$ROOT"/rtl/periph/*.v "$ROOT/rtl/brv32p_soc.v" "$ROOT/tests/isa/tb_isa.v"
-result=$(cd "$B" && vvp -n tb_isa.vvp +hex="$B/dsp.hex" +tohost="$tohost" +trace="$B/dsp.trace" \
+. "$HERE/sim.sh"                      # SIM=verilator for a fast simulator (sim.sh)
+sim_build "$B/sim" 16384
+result=$(cd "$B" && $(sim_cmd "$B/sim") +hex="$B/dsp.hex" +tohost="$tohost" +trace="$B/dsp.trace" \
            +pipe="$B/dsp.pipe" +timeout=4000000 | grep '^RESULT' || echo "RESULT ERROR (simulator)")
 echo "$result"
 case "$result" in "RESULT PASS"*) ;; *) exit 1 ;; esac

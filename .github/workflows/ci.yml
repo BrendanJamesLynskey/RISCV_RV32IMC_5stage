@@ -54,6 +54,11 @@ jobs:
       - name: Run DSP benchmarks
         run: SPIKE="$HOME/spike/bin/spike" tests/bench/run_bench.sh
 
+      - name: CPI breakdown (causes must sum to cycles - retired)
+        run: |
+          tests/bench/run_cpi_micro.sh
+          python3 tests/bench/cpi_breakdown.py tests/bench/build/dsp.pipe --kernels fir_mac,energy_mac,crc32_table
+
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4

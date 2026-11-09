@@ -9,6 +9,10 @@
 #                                                 lanes (default), bit-
 #                                                 interleaved 32-bit lanes, or
 #                                                 those with Zbkb (keccak.c)
+#        PIPE=<file or fifo> tests/bench/run_kem.sh ...
+#                                                 also write the pipeline trace
+#                                                 there (gigabytes: use a fifo
+#                                                 read by cpi_breakdown.py -)
 #        HOST=1 tests/bench/run_kem.sh             build with the host's gcc
 #                                                 and check against the model
 #                                                 (no simulation), every
@@ -70,10 +74,8 @@ CFLAGS=(-O2 -falign-loops=4 -mabi=ilp32 -mcmodel=medany -ffreestanding -I "$B" -
 "${CROSS}gcc" "${CFLAGS[@]}" -march="$MARCH_ZK" -c "$HERE/mlkem_x.c" -o "$B/mlkem_x.o"
 "${CROSS}gcc" "${CFLAGS[@]}" "${kdefs[@]}" -march="$kmarch" -c "$HERE/keccak.c" -o "$B/keccak$suffix.o"
 
-iverilog -g2005 -DTB_MEM_DEPTH=$MEM_WORDS -o "$B/tb_kem.vvp" -I "$ROOT/rtl/pkg" -I "$ROOT/rtl/core" \
-  "$ROOT"/rtl/core/*.v "$ROOT"/rtl/cache/*.v \
-  "$ROOT/rtl/bus/axi_interconnect.v" "$ROOT/rtl/bus/axi_sram.v" "$ROOT/rtl/bus/axi_periph_bridge.v" \
-  "$ROOT"/rtl/periph/*.v "$ROOT/rtl/brv32p_soc.v" "$ROOT/tests/isa/tb_isa.v"
+. "$HERE/sim.sh"                      # SIM=verilator for a fast simulator (sim.sh)
+sim_build "$B/simkem" $MEM_WORDS
 
 backends=("$@")
 [ ${#backends[@]} -eq 0 ] && backends=(ref ext)
@@ -91,8 +93,8 @@ for be in "${backends[@]}"; do
   "${CROSS}objdump" -d "$elf" > "$B/kem_$be$suffix.dis"
   tohost=$("${CROSS}nm" "$elf" | awk '$3 == "tohost" { print $1 }')
 
-  result=$(cd "$B" && vvp -n tb_kem.vvp +hex="$B/kem_$be$suffix.hex" +tohost="$tohost" +trace="$B/kem_$be$suffix.trace" \
-             +marks="$B/kem_$be$suffix.marks" +timeout=60000000 | grep '^RESULT' || echo "RESULT ERROR (simulator)")
+  result=$(cd "$B" && $(sim_cmd "$B/simkem") +hex="$B/kem_$be$suffix.hex" +tohost="$tohost" +trace="$B/kem_$be$suffix.trace" \
+             +marks="$B/kem_$be$suffix.marks" ${PIPE:+"+pipe=$PIPE"} +timeout=60000000 | grep '^RESULT' || echo "RESULT ERROR (simulator)")
   echo "kem_$be$suffix: $result"
   case "$result" in "RESULT PASS"*) ;; *) exit 1 ;; esac
 

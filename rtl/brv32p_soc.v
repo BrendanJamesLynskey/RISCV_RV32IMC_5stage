@@ -2,8 +2,12 @@
 // brv32p_soc.v — BRV32P SoC Top-Level
 // ============================================================================
 
+`include "brv32p_cache.vh"
+
 module brv32p_soc #(
   parameter MEM_DEPTH  = 8192,
+  parameter IC_SETS    = `IC_SETS_DEFAULT,    // I-cache: 2 ways x 16-byte lines x IC_SETS
+  parameter DC_SETS    = `DC_SETS_DEFAULT,
   parameter INIT_FILE  = "firmware.hex",
   parameter [31:0] RESET_PC = 32'h0000_0000   // every non-peripheral address aliases the SRAM
 )(
@@ -86,7 +90,7 @@ module brv32p_soc #(
   // ══════════════════════════════════════════════════════════════════════
   // I-Cache
   // ══════════════════════════════════════════════════════════════════════
-  icache u_icache (
+  icache #(.SETS(IC_SETS)) u_icache (
     .clk       (clk),
     .rst_n     (rst_n),
     .addr      (core_imem_addr),
@@ -103,7 +107,7 @@ module brv32p_soc #(
   // ══════════════════════════════════════════════════════════════════════
   // D-Cache
   // ══════════════════════════════════════════════════════════════════════
-  dcache u_dcache (
+  dcache #(.SETS(DC_SETS)) u_dcache (
     .clk       (clk),
     .rst_n     (rst_n),
     .addr      (core_dmem_addr),

@@ -22,6 +22,15 @@
 //                      from), and mispredicts split into those, jumps
 //                      (JAL/JALR, which the predictor never learns) and
 //                      taken predictions for something that is not a branch
+//   +cachelog=<file>  optional: log what the caches saw. "I cyc addr h|m" and
+//                      "D cyc addr h|m r|w" are accesses (hit or miss; runs of
+//                      hits to the same 16-byte line are dropped), "i cyc" and
+//                      "d cyc" the end of a line fill, "M n cyc ic_acc dc_acc"
+//                      a BENCH_MARK with the cumulative accesses (fetches
+//                      delivered to the pipeline; loads and stores leaving MEM,
+//                      peripherals excluded), and a last line "E cyc retired
+//                      ic_acc dc_acc ic_miss dc_miss ic_busy dc_busy" (busy =
+//                      cycles the cache spends off its idle state)
 // The test stores 1 to tohost on success, or (testnum << 1) | 1 on failure;
 // the store is seen on the core's retire trace. Prints one line:
 //   RESULT PASS|FAIL|TIMEOUT <cycles> cycles <n> retired [failing test case]
@@ -60,6 +69,15 @@ module tb_isa;
   integer      timeout, cycles, retired, trace_fd, hex_fd, pipe_fd, marks_fd, stats_fd;
   integer      st_br, st_mp_c, st_mp_j, st_mp_o;
 
+  reg [8*512-1:0] clog_file;
+  integer clog_fd, ic_acc, dc_acc, ic_miss, dc_miss, ic_busy, dc_busy;
+  reg [31:0] ic_last, dc_last;
+  reg        ic_have, dc_have;
+  reg [1:0]  ic_state_q;
+  reg [2:0]  dc_state_q;
+  `define IC dut.u_icache
+  `define DC dut.u_dcache
+
   initial begin
     if (!$value$plusargs("hex=%s", hex_file)) begin
       $display("RESULT FAIL 0 cycles 0 retired (no +hex given)");
@@ -74,6 +92,10 @@ module tb_isa;
     if ($value$plusargs("trace=%s", trace_file)) trace_fd = $fopen(trace_file, "w");
     marks_fd = 0;
     if ($value$plusargs("marks=%s", marks_file)) marks_fd = $fopen(marks_file, "w");
+    clog_fd = 0;
+    ic_acc = 0; dc_acc = 0; ic_miss = 0; dc_miss = 0; ic_busy = 0; dc_busy = 0;
+    ic_have = 0; dc_have = 0; ic_last = 0; dc_last = 0; ic_state_q = 0; dc_state_q = 0;
+    if ($value$plusargs("cachelog=%s", clog_file)) clog_fd = $fopen(clog_file, "w");
     stats_fd = 0;
     st_br = 0; st_mp_c = 0; st_mp_j = 0; st_mp_o = 0;
     if ($value$plusargs("stats=%s", stats_file)) stats_fd = $fopen(stats_file, "w");
@@ -124,6 +146,45 @@ module tb_isa;
   end
   endtask
 
+  // Cache access log (+cachelog=). Sampled on the rising edge, before the
+  // registers update: the cache's state and its combinational hit are those
+  // of the cycle that ends here.
+  always @(posedge clk) if (rst_n && clog_fd != 0) begin
+    // instruction cache: a hit is seen as it happens; a miss is seen as the
+    // fill starts (the state leaves idle), which does not depend on the
+    // order in which this block and the cache's meet at the first clock edge
+    if (`IC.state == 2'd0 && `IC.rd_en && !`IC.invalidate && `IC.hit) begin
+      if (!ic_have || ic_last != {`IC.addr[31:4], 4'b0}) begin
+        $fwrite(clog_fd, "I %0d %08h h\n", cycles, `IC.addr);
+        ic_last = {`IC.addr[31:4], 4'b0}; ic_have = 1;
+      end
+    end
+    if (`IC.state == 2'd1 && ic_state_q == 2'd0) begin
+      $fwrite(clog_fd, "I %0d %08h m\n", cycles, `IC.fill_base_addr);
+      ic_miss = ic_miss + 1; ic_have = 0;
+    end
+    ic_state_q = `IC.state;
+    if (`IC.state == 2'd2) $fwrite(clog_fd, "i %0d\n", cycles);
+    if (`IC.state != 2'd0) ic_busy = ic_busy + 1;
+    if (!`CORE.stall_id && !`CORE.mem_stall && `CORE.fetch_valid && !`CORE.imem_stall) ic_acc = ic_acc + 1;
+    // data cache: the same, a miss being the state leaving idle for the fill
+    if (`DC.state == 3'd0 && (`DC.rd_en || `DC.wr_en) && !`DC.uncached && `DC.hit) begin
+      if (!dc_have || dc_last != {`DC.addr[31:4], 4'b0}) begin
+        $fwrite(clog_fd, "D %0d %08h h %s\n", cycles, `DC.addr, `DC.wr_en ? "w" : "r");
+        dc_last = {`DC.addr[31:4], 4'b0}; dc_have = 1;
+      end
+    end
+    if (`DC.state == 3'd1 && dc_state_q == 3'd0) begin
+      $fwrite(clog_fd, "D %0d %08h m %s\n", cycles, `DC.pending_addr, `DC.pending_is_write ? "w" : "r");
+      dc_miss = dc_miss + 1; dc_have = 0;
+    end
+    dc_state_q = `DC.state;
+    if (`DC.state == 3'd2) $fwrite(clog_fd, "d %0d\n", cycles);
+    if (`DC.state != 3'd0) dc_busy = dc_busy + 1;
+    if (`CORE.valid_mem && (`CORE.dmem_rd || `CORE.dmem_wr) && !`CORE.mem_stall && !`CORE.exc_mem
+        && `CORE.dmem_addr[31:28] != 4'h2) dc_acc = dc_acc + 1;
+  end
+
   // Pipeline trace: one line per cycle, sampled on the falling edge, when the
   // registers hold this cycle's contents and the combinational control
   // (stalls, flushes, forwarding) has settled. The next rising edge acts on it.
@@ -173,6 +234,8 @@ module tb_isa;
       // BENCH_MARK(n): slti zero, zero, n (OP-IMM, funct3 010, rd and rs1 zero)
       if (marks_fd != 0 && `CORE.retire_insn[19:0] == 20'h02013)
         $fwrite(marks_fd, "%0d %0d\n", `CORE.retire_insn[31:20], cycles);
+      if (clog_fd != 0 && `CORE.retire_insn[19:0] == 20'h02013)
+        $fwrite(clog_fd, "M %0d %0d %0d %0d\n", `CORE.retire_insn[31:20], cycles, ic_acc, dc_acc);
       if (stats_fd != 0 && `CORE.retire_insn[19:0] == 20'h02013)
         $fwrite(stats_fd, "%0d %0d %0d %0d %0d %0d %0d\n", `CORE.retire_insn[31:20], cycles, retired,
                 st_br, st_mp_c, st_mp_j, st_mp_o);
@@ -188,6 +251,10 @@ module tb_isa;
         if (trace_fd != 0) $fclose(trace_fd);
         if (pipe_fd != 0) $fclose(pipe_fd);
         if (marks_fd != 0) $fclose(marks_fd);
+        if (clog_fd != 0) begin
+          $fwrite(clog_fd, "E %0d %0d %0d %0d %0d %0d %0d %0d\n", cycles, retired, ic_acc, dc_acc, ic_miss, dc_miss, ic_busy, dc_busy);
+          $fclose(clog_fd);
+        end
         if (stats_fd != 0) begin
           $fwrite(stats_fd, "end %0d %0d %0d %0d %0d %0d\n", cycles, retired, st_br, st_mp_c, st_mp_j, st_mp_o);
           $fclose(stats_fd);

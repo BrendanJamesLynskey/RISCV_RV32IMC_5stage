@@ -8,7 +8,10 @@
 
 set part   [expr {[llength $argv] > 0 ? [lindex $argv 0] : "xc7a100tcsg324-1"}]
 set period [expr {[llength $argv] > 1 ? [lindex $argv 1] : 10.0}]
-set out    build/vivado
+# OUT=<dir> sends the reports elsewhere; VERILOG_DEFINES="BP_KIND_DEFAULT=3 ..." sets
+# macros for synthesis (the branch predictor's kind and sizes, rtl/pkg/brv32p_bp.vh)
+set out    [expr {[info exists ::env(OUT)] ? $::env(OUT) : "build/vivado"}]
+set defs   [expr {[info exists ::env(VERILOG_DEFINES)] ? $::env(VERILOG_DEFINES) : {}}]
 
 # Single-threaded keeps the peak memory down (each worker process holds its
 # own copy of the design); runs one at a time on a 16 GB machine
@@ -22,7 +25,9 @@ set_property include_dirs [list rtl/pkg rtl/core] [current_fileset]
 # to the run directory
 file copy -force firmware/firmware.hex firmware.hex
 
-synth_design -top brv32p_soc -part $part -mode out_of_context
+set vdef {}
+foreach d $defs { lappend vdef -verilog_define $d }
+synth_design -top brv32p_soc -part $part -mode out_of_context {*}$vdef
 create_clock -name clk -period $period [get_ports clk]
 report_utilization -file $out/utilization_synth.rpt
 

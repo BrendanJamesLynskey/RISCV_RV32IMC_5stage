@@ -51,6 +51,13 @@ jobs:
       - name: Run ISA tests
         run: SPIKE="$HOME/spike/bin/spike" tests/isa/run_isa.sh
 
+      - name: Branch predictor kinds (static, 1-bit, gshare, tournament)
+        run: |
+          for k in 0 1 3 4; do
+            IVFLAGS="-DBP_KIND_DEFAULT=$k" SPIKE="$HOME/spike/bin/spike" tests/isa/run_isa.sh \
+              rv32ui/beq rv32ui/bne rv32ui/blt rv32ui/bge rv32ui/bltu rv32ui/bgeu rv32ui/jal rv32ui/jalr rv32ui/simple
+          done
+
       - name: Run DSP benchmarks
         run: SPIKE="$HOME/spike/bin/spike" tests/bench/run_bench.sh
 

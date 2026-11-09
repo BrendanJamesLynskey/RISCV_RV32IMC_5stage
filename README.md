@@ -236,7 +236,8 @@ scripts/pipeview.py diagram tests/isa/build/rv32ui-lw.pipe --dis tests/isa/build
 See [doc/pipeline_trace.md](doc/pipeline_trace.md) for the format, the checking method, and real diagrams of
 load-use, mispredicts, MUL/DIV, an interrupt and cache misses. [doc/cpi_breakdown.md](doc/cpi_breakdown.md)
 charges every lost cycle of the benchmarks to one cause (CPI = 1 + stalls per instruction, per cause);
-[doc/branch_prediction.md](doc/branch_prediction.md) compares five branch predictors on them.
+[doc/branch_prediction.md](doc/branch_prediction.md) compares five branch predictors on them;
+[doc/cache_sweeps.md](doc/cache_sweeps.md) sweeps the caches and splits their misses into compulsory, capacity and conflict.
 
 ### Lint
 

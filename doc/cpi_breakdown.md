@@ -49,7 +49,7 @@ The cause columns:
 
 The attribution was checked against an independent one: `scripts/pipeview.py`'s
 `lost_cycles()` traces each bubble back to its origin, where this tool moves tags
-forward. The two agree on every lost cycle of the micro-test (1,379) (`--crosscheck`).
+forward. The two agree on every lost cycle of the micro-test (1,379) and of the whole DSP program (456,946) (`--crosscheck`).
 
 ## Two predictions from `hazard_unit.v`, measured
 

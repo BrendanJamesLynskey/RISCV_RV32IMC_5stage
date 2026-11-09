@@ -111,6 +111,7 @@ RISCV_RV32IMC_5stage/
 │       ├── cpi_breakdown.py          # CPI by cause from a pipeline trace (H&P App. C form); sums checked
 │       ├── cpi_micro.S, run_cpi_micro.sh  # Directed tests: load-use costs 1 bubble, a mispredict 2
 │       ├── bp_sweep.sh, bp_report.py # Branch predictor sweep (kinds, table sizes, history) and its tables
+│       ├── cache_sweep.sh, cache_model.py, cache_report.py  # Cache size sweeps in the RTL, the 3-C model (ways, line size), tables and plots
 │       ├── run_kem_cpi.sh            # The same for ML-KEM-512, through a named pipe
 │       ├── sim.sh                    # Build/run the testbench with Icarus or (SIM=verilator) Verilator
 │       ├── run_kem.sh                # The whole of ML-KEM-512 (kem_main.c), reference and Xbrvdsp builds, three Keccak variants
@@ -128,6 +129,7 @@ RISCV_RV32IMC_5stage/
 │   ├── BRV32P_Design_Report.md       # Detailed micro-architecture write-up
 │   ├── pipeline_trace.md             # The pipeline trace, its checking, and real diagrams
 │   ├── branch_prediction.md          # Five branch predictors measured on the benchmarks, with LUT/FF/timing cost
+│   ├── cache_sweeps.md               # Cache size, ways and line size, the 3 Cs, AMAT and CPI; where the knee is
 │   ├── cpi_breakdown.md              # Where the cycles go: CPI by cause for the benchmarks and ML-KEM-512
 │   ├── dsp_extension.md              # Xbrvdsp: encodings, semantics, micro-architecture
 │   ├── crypto_extensions.md          # Zbkb/c/x, Zknh, Zkne, Zknd: implementation, tests, SHA-256, AES, CRC-32
@@ -234,7 +236,8 @@ scripts/pipeview.py diagram tests/isa/build/rv32ui-lw.pipe --dis tests/isa/build
 See [doc/pipeline_trace.md](doc/pipeline_trace.md) for the format, the checking method, and real diagrams of
 load-use, mispredicts, MUL/DIV, an interrupt and cache misses. [doc/cpi_breakdown.md](doc/cpi_breakdown.md)
 charges every lost cycle of the benchmarks to one cause (CPI = 1 + stalls per instruction, per cause);
-[doc/branch_prediction.md](doc/branch_prediction.md) compares five branch predictors on them.
+[doc/branch_prediction.md](doc/branch_prediction.md) compares five branch predictors on them;
+[doc/cache_sweeps.md](doc/cache_sweeps.md) sweeps the caches and splits their misses into compulsory, capacity and conflict.
 
 ### Lint
 

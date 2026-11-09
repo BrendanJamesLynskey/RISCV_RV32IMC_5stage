@@ -25,7 +25,7 @@ sim_build() {
   mkdir -p "$dir"
   if [ "${SIM:-iverilog}" = verilator ]; then
     "${VERILATOR:-verilator}" --binary --timing -Wno-fatal -Wno-lint -Wno-style --top-module tb_isa \
-      -DTB_MEM_DEPTH="$mem" "$@" -I"$root/rtl/pkg" -I"$root/rtl/core" -O3 --x-assign fast --x-initial fast \
+      -DTB_MEM_DEPTH="$mem" "$@" -I"$root/rtl/pkg" -I"$root/rtl/core" -O3 --x-assign fast --x-initial fast --unroll-count 1024 --unroll-stmts 200000 \
       -j 2 --Mdir "$dir/obj" -o vtb "${files[@]}" > "$dir/verilator.log" 2>&1
   else
     iverilog -g2005 -DTB_MEM_DEPTH="$mem" "$@" -o "$dir/tb.vvp" -I "$root/rtl/pkg" -I "$root/rtl/core" "${files[@]}"

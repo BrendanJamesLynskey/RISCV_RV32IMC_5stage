@@ -160,7 +160,29 @@ gshare, table size and history length:
 
 ## Cost: LUTs, flip-flops, timing
 
-Not yet measured: Vivado out-of-context place and route (`scripts/vivado_ooc.tcl`, which now takes `VERILOG_DEFINES` and `OUT`) is queued behind another session's implementation run; this section is filled in when it finishes.
+Vivado 2025.2, `scripts/vivado_ooc.tcl`: out-of-context synthesis, place and route of the whole SoC (32 KB SRAM,
+Zk/DSP/mod-q units, both caches) for the Artix-7 xc7a100tcsg324-1, 10 ns clock, one run per build; `VERILOG_DEFINES="BP_KIND_DEFAULT=n"`.
+The default (2-bit) build is the repository's existing one, run again.
+
+| Predictor | LUTs (whole SoC) | Flip-flops | LUTs / FFs in the predictor | WNS at 10 ns | Fmax | Worst path |
+|---|--:|--:|--:|--:|--:|---|
+| 2-bit (default) | 11,832 | 7,975 | 2,414 / 4,224 | -5.966 ns | 62.6 MHz | `pc_if` to `instr_id` (fetch) |
+| gshare, history 8 | 11,770 | 7,934 | 2,374 / 4,232 | -5.678 ns | 63.8 MHz | mod-q multiplier to write-back |
+| tournament | 13,190 | 8,929 | 3,767 / 5,256 | -5.505 ns | 64.5 MHz | `pc_if` to `pc_if` (next-PC loop) |
+
+* **Area.** gshare costs nothing over the 2-bit table: it replaces the table of counters by a table of counters of the same
+  size, and adds an 8-bit history, a 64-entry table of what was predicted at each fetch address, and an XOR (8 more flip-flops, 12 LUTs of
+  memory). The tournament is both predictors and a chooser: +1,358 LUTs and +954 flip-flops over the default for the whole SoC (+11.5% LUTs, +12% flip-flops).
+  The predictor is 20% of the SoC's LUTs in the default build and 29% in the tournament build; most of it is the table of
+  256 two-bit counters held in flip-flops with a per-entry update, not the logic of the kinds.
+* **Timing is not separated by the predictor.** All three builds miss 10 ns by 5.5 to 6.0 ns, and the order of the WNS (the
+  tournament best) is not meaningful: the worst path moves between runs (the README's table has -5.7 ns for an earlier revision of this design, this run -5.966 ns), and in the gshare build it is the mod-q multiplier, not fetch. Only the tournament's worst path goes through the
+  predictor (the next-PC loop, `pc_if` through the BHT and BTB reads to `pc_if`) and even there at 15.4 ns it is no worse than the other two.
+  One run each does not resolve a difference of a few tenths of a nanosecond: this says gshare and tournament do not make the
+  clock visibly worse, not that they are free.
+* So, for these workloads: gshare for the price of a few flip-flops, a clear win on loop-heavy compute kernels, and neutral or a small loss
+  where branches are biased and runs are short; the tournament for about 11% more LUTs removes the losses and gets most of
+  the rest, and is worth it only if branchy kernels dominate (the whole-set CPI gain is 0.2%).
 
 
 ## Reproducing
